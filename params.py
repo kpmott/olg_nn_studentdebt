@@ -164,3 +164,9 @@ def typeOut(tensList):
     assetsJ = tensList[assetsAll].reshape(J,N*(L-1))
     prices = tensList[pricesAll].repeat(J,1)
     return torch.concat([assetsJ,prices],-1)
+
+#This takes in output tensor (matrix) and returns output tensor (list)
+def vecOut(tensMat):
+    assets = tensMat[...,:-2].flatten()
+    prices = tensMat[-1,-2:]
+    return torch.concat([assets,prices],0)
