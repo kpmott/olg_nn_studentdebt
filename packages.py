@@ -5,7 +5,6 @@ import os
 import torch
 torch.set_default_tensor_type('torch.cuda.FloatTensor') #put everything on GPU
 import torch.nn as nn #neural network tools
-import torch.nn.functional as F #some helpful functions live here 
 from torch.optim import Adam #this is my optimizer (fancy SGD)
 from torch.utils.data import DataLoader, Dataset #batching tools
 
@@ -17,7 +16,7 @@ import numpy as np
 
 #normal distribution and solver, respectively
 from scipy.stats import norm
-from scipy.optimize import fsolve
+from scipy.optimize import fsolve, minimize
 
 #floor and ceiling functions
 from math import floor, ceil
