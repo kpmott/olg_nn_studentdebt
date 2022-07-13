@@ -28,16 +28,13 @@ class custAct(nn.Module):
         nn_sp = nn.Softplus()
         nn_relu = nn.ReLU()
 
-        x = typeOut(x)
-
         act1 = nn_relu(x[...,equity])
         act2 = x[...,bond]
-        act3 = nn_sp(x[...,price])
-        act4 = nn_sp(x[...,ir])
+        act3 = nn_sp(x[...,prices])
         
-        x = torch.concat([act1,act2,act3,act4],dim=-1)
+        x = torch.concat([act1,act2,act3],dim=-1)
         
-        return vecOut(x)
+        return x
 
 #THIS IS THE NEURAL NETWORK!
 class MODEL(pl.LightningModule):
@@ -77,22 +74,33 @@ class MODEL(pl.LightningModule):
         self.model.eval()
         
         #Given x, calculate predictions 
-        y_pred = typeOut(self.model(x))
+        y_pred = self.model(x)
+        yLen = y_pred.shape[0]
 
         #-------------------------------------------------------------------------------------
+        def padAssets(ASSETS,side=0):
+            ASSETSJ = ASSETS.reshape(yLen,L-1,J)
+            if side==0:
+                ASSETSJpad = nn.functional.pad(ASSETSJ,(1,0))
+            else:
+                ASSETSJpad = nn.functional.pad(ASSETSJ,(0,1))
+            return torch.flatten(ASSETSJpad,start_dim=-2)
+
         #Allocations/prices from predictions: TODAY
         E = y_pred[...,equity] #equity
         B = y_pred[...,bond] #bonds
-        P = y_pred[...,price] #price of equity
-        Q = y_pred[...,ir] #price of bonds
+        P = y_pred[...,eqprice] #price of equity
+        Q = y_pred[...,bondprice] #price of bonds
 
         #BC accounting: Consumption
-        E_ = torch.nn.functional.pad(x[...,equity],(1,0)) #equity lag: in state variable
-        B_ = torch.nn.functional.pad(x[...,bond],(1,0)) #bond lag: in state variable
-        Ω_ = x[...,endow] #state-contingent endowment
-        Δ_ = x[...,div] #state-contingent dividend
-        Chat = Ω_ + (P+Δ_)*E_ + B_ - P*torch.nn.functional.pad(E,(0,1)) - Q*torch.nn.functional.pad(B,(0,1)) #Budget Constraint
-        
+        E_ = padAssets(x[...,equity],side=0) #equity lag: in state variable
+        B_ = padAssets(x[...,bond],side=0) #bond lag: in state variable
+        y_ = x[...,incomes] #state-contingent endowment
+        Δ_ = x[...,divs] #state-contingent dividend
+        Chat = y_ + (P+Δ_)*E_ + B_ - P*padAssets(E,side=1) - Q*padAssets(B,side=1) \
+            - debtPay.flatten()*torch.ones(yLen,L*J) - τ.flatten()*torch.ones(yLen,L*J) \
+            - ϕ(padAssets(B,side=1))
+
         #Penalty if Consumption is negative 
         ϵc = 1e-6
         C = torch.maximum(Chat,ϵc*(Chat*0+1))
@@ -100,35 +108,42 @@ class MODEL(pl.LightningModule):
 
         #-------------------------------------------------------------------------------------
         #1-PERIOD FORECAST: for Euler expectations
-        
+        def padAssetsF(ASSETS,side=0):
+            ASSETSJ = ASSETS.reshape(S,yLen,L-1,J)
+            if side==0:
+                ASSETSJpad = nn.functional.pad(ASSETSJ,(1,0))
+            else:
+                ASSETSJpad = nn.functional.pad(ASSETSJ,(0,1))
+            return torch.flatten(ASSETSJpad,start_dim=-2)
+
         #state variable construction 
         endog = torch.concat([E,B],-1)[None].repeat(S,1,1) #lagged asset holdings tomorrow are endog. asset holdings today 
-        exog = torch.tensor([[*[wvec[s]],*ωvec[s], *[δvec[s]]] for s in range(S)])[:,None,:].repeat(1,len(y_pred),1) #state-contingent realizations tomorrow
-        Σf = torch.concat([endog,exog],-1).float() #full state variable tomorrow 
-        Yf = self.model(Σf).detach() #predictions for forecast values 
+        exog = torch.outer(shocks,torch.concat([y.flatten(),F.reshape(1),δ.reshape(1)],0))[:,None,:].repeat(1,yLen,1) #state contingent vars
+        Xf = torch.concat([endog,exog],-1).float() #full state variable tomorrow 
+        Yf = self.model(Xf).detach() #predictions for forecast values 
 
         #Allocations/prices from forecast predictions: TOMORROW (f stands for forecast)
         Ef = Yf[...,equity] #equity forecast
         Bf = Yf[...,bond] #bond forecast
-        Pf = Yf[...,price] #equity price forecast
-        Qf = Yf[...,ir] #bond price forecast
+        Pf = Yf[...,eqprice] #equity price forecast
+        Qf = Yf[...,bondprice] #bond price forecast
         
         #BC accounting: consumption 
-        Ef_ = torch.nn.functional.pad(E,(1,0))[None].repeat(S,1,1) #equity lags: from today's calculation
-        Bf_ = torch.nn.functional.pad(B,(1,0))[None].repeat(S,1,1) #bond lags
-        Ωf_ = Σf[...,endow] #endowment realization
-        Δf_ = Σf[...,div] #dividend realization
-        Cf = Ωf_ + (Pf+Δf_)*Ef_ + Bf_ - Pf*torch.nn.functional.pad(Ef,(0,1,0,0,0,0)) - Qf*torch.nn.functional.pad(Bf,(0,1,0,0,0,0)) #budget constraint
+        Ef_ = padAssets(E,side=0)[None].repeat(S,1,1) #equity forecast lags
+        Bf_ = padAssets(B,side=0)[None].repeat(S,1,1) #bond forecase lags
+        yf_ = Xf[...,incomes] #endowment realization
+        Δf_ = Xf[...,divs] #dividend realization
+        Cf = yf_ + (Pf+Δf_)*Ef_ + Bf_ - Pf*padAssetsF(Ef,side=1) - Qf*padAssetsF(Bf,side=1) \
+            - debtPay.flatten()*torch.ones(S,yLen,L*J) - τ.flatten()*torch.ones(S,yLen,L*J) \
+            - ϕ(padAssetsF(Bf,side=1))
 
         #Euler Errors: equity then bond: THIS IS JUST E[MR]-1=0
-        eqEuler = torch.sum(torch.abs(torch.tensordot(β*up(Cf[...,1:])/up(C[...,:-1])*(Pf+Δf_)/P,torch.tensor(probs),dims=([0],[0]))-1),-1) +1
-        #torch.prod(torch.abs(torch.tensordot(β*up(Cf[...,1:])/up(C[...,:-1])*(Pf+Δf_)/P,torch.tensor(probs),dims=([0],[0]))-1)+1,-1)
-        bondEuler = torch.prod(torch.abs(torch.tensordot(β*up(Cf[...,1:])/up(C[...,:-1])/Q,torch.tensor(probs),dims=([0],[0]))-1),-1) +1
-        #torch.prod(torch.abs(torch.tensordot(β*up(Cf[...,1:])/up(C[...,:-1])/Q,torch.tensor(probs),dims=([0],[0]))-1)+1,-1)
+        eqEuler = torch.sum(torch.abs(torch.tensordot(β*up(Cf[...,1:])/up(C[...,:-1])*(Pf+Δf_)/P,torch.tensor(probs),dims=([0],[0]))-1),-1)
+        bondEuler = torch.prod(torch.abs(torch.tensordot(β*up(Cf[...,1:])/up(C[...,:-1])/Q,torch.tensor(probs),dims=([0],[0]))-1),-1)
 
         #Market Clearing Errors
-        equityMCC = torch.abs(equitysupply-torch.sum(E,-1))+1
-        bondMCC = torch.abs(bondsupply-torch.sum(B,-1))+1
+        equityMCC = torch.abs(1-torch.sum(E,-1))
+        bondMCC = torch.abs(torch.sum(B,-1))
 
         #so in each period, the error is the sum of above
         #EULERS + MCCs + consumption penalty 
@@ -172,12 +187,6 @@ class MODEL(pl.LightningModule):
     
     #define the optimizer 
     def configure_optimizers(self):
-        #x,y = batch
-        #pretrain = (torch.max(y) > 0.)
-        #if pretrain:
-        #    lr=1e-4
-        #else:
-        #    lr=1e-7
         lr=1e-7
         return Adam(self.model.parameters(), lr=lr)
 
@@ -190,28 +199,37 @@ class CustDataSet(Dataset):
         model.to("cuda") #make sure we're on GPU
         model.eval() #turn off dropout
         
-        #state variables: Σ
+        #state variables: X
         #prediction variables: Y
-        shist, whist, Ωhist, Δhist, Ω, Δ = SHOCKS() #shock path
-        Σ = torch.zeros(T,input)
+        shist, zhist = SHOCKS() #shock path
+
+        #Firms
+        Yhist = F*zhist
+        δhist = δ*zhist
+        yhist = y*zhist
+
+        #Network training data and predictions
+        X = torch.zeros(T,input)
         Y = torch.zeros(T,output)
-        Σ[0] = torch.tensor([*ebar,*bbar,*[wbar],*ω_scalar,*[δ_scalar]])
-        Y[0] = model(Σ[0])
+        X[0] = torch.concat([ebar.flatten(),bbar.flatten(),yhist[0].flatten(),Yhist[0,0],δhist[0,0]],0)
+        Y[0] = model(X[0])
         for t in range(1,T):
-            Σ[t] = torch.tensor([[*Y[t-1,equity],*Y[t-1,bond],*[whist[t]],*Ωhist[t],*[Δhist[t]]]])
-            Y[t] = model(Σ[t])
+            eLag = Y[t-1,equity]
+            bLag = Y[t-1,bond]
+            X[t] = torch.concat([eLag.flatten(),bLag.flatten(),yhist[t].flatten(),Yhist[t,0],δhist[t,0]],0)
+            Y[t] = model(X[t])
         
         #lop off burn period
-        Σ, Y = Σ[time], Y[time]
+        #X, Y = X[time], Y[time]
         
         #training inputs
-        self.Σ = Σ.detach().clone()
+        self.X = X.detach().clone()
 
         #training labels: if pretrain then detSS otherwise zeros
         if pretrain:
-            self.Y = torch.ones(train,output)*torch.tensor([*ebar,*bbar,*[pbar],*[qbar]]).float()
+            self.Y = torch.ones(T,output)*torch.concat([ebar.flatten(),bbar.flatten(),pbar.flatten(),qbar.flatten()],0)
         else:
-            self.Y = torch.zeros(train).float()
+            self.Y = torch.zeros(T).float()
 
         model.train() #turn on dropout for training
 
@@ -221,4 +239,6 @@ class CustDataSet(Dataset):
     
     #return index batches
     def __getitem__(self,idx):
-        return self.Σ[idx], self.Y[idx]
+        return self.X[idx], self.Y[idx]
+
+ds = CustDataSet()

@@ -1,5 +1,3 @@
-#!/home/kpmott/Git/olg_nn_studentdebt/pyt_olg/bin/python3
-
 from packages import *
 from params import *
 

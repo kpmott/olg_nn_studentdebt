@@ -35,7 +35,8 @@ isEducated = torch.concat([torch.zeros(1,L,1),torch.ones(1,L,J-1)],-1)
 #stochastics 
 probs = [0.5, 0.5] #prob of each state
 S = len(probs)  #number of states
-ζtrue = 0.05 #aggregate shock size 
+ζ = 0.05 #aggregate shock size 
+shocks = torch.tensor([1-ζ,1+ζ])
 
 #--------------------------------------------------------------------------------
 #utility function 
@@ -147,8 +148,8 @@ def SHOCKS():
     shocks = range(S)
     
     #Shock history:
-    shist = torch.tensor(np.random.choice(shocks,T,probs),dtype=torch.int32)
-    zhist = shist*ζtrue*2-ζtrue + 1
+    shist = torch.tensor(np.random.choice(shocks,T,probs),dtype=torch.int32).reshape((T,1,1))
+    zhist = shist*ζ*2-ζ + 1
 
     return shist, zhist
 
@@ -161,13 +162,10 @@ input = N*J*(L-1) + J*L         + 1                 + 1
 
 #slices to grab input
 typesState = slice(0,-2,1) #type-speciific state variables
+incomes = slice(2*J*(L-1),2*J*(L-1)+L*J,1)
+resources = slice(-2,-1,1)
+divs = slice(-1,input,1)
 aggState = slice(-2,input,1) #aggregate quantities state variables
-
-#This takes in input tensor (list) and returns input tensor (matrix: rows are types)
-def typeIn(tensList):
-    assetsIncomesJ = tensList[typesState].reshape(J,N*(L-1)+L) #assets and incomes by type j
-    stateContingent = tensList[aggState].repeat(J,1) #state-contingent total resources and dividend
-    return torch.concat([assetsIncomesJ,stateContingent],-1)
 
 #--------------------------------------------------------------------------------
 # output
@@ -176,23 +174,22 @@ output = N*J*(L-1) + N
 
 #AGGREGATE VECTOR SLICES
 #all assets, all prices
-assetsAll = slice(0,-2,1)
-pricesAll  = slice(-2,output,1)
+assets = slice(0,-2,1)
+equity = slice(0,J*(L-1),1)
+bond = slice(J*(L-1),2*J*(L-1),1)
+prices  = slice(-2,output,1)
+eqprice = slice(-2,-1,1)
+bondprice = slice(-1,output,1)
 
 #WITHIN-TYPE SLICES
-equity  = slice(0     ,L-1    ,1)
-bond    = slice(L-1   ,2*L-2  ,1)
-price   = slice(2*L-2 ,2*L-1  ,1)
-ir      = slice(2*L-1 ,2*L    ,1)
+equityJ  = slice(0     ,J*(L-1)    ,1)
+bondJ    = slice(L-1   ,2*L-2  ,1)
+priceJ   = slice(2*L-2 ,2*L-1  ,1)
+irJ      = slice(2*L-1 ,2*L    ,1)
 
 #This takes in output tensor (list) and returns output tensor (matrix: rows are types)
 def typeOut(tensList):
-    assetsJ = tensList[assetsAll].reshape(J,N*(L-1))
-    prices = tensList[pricesAll].repeat(J,1)
-    return torch.concat([assetsJ,prices],-1)
-
-#This takes in output tensor (matrix) and returns output tensor (list)
-def vecOut(tensMat):
-    assets = tensMat[...,:-2].flatten()
-    prices = tensMat[-1,-2:]
-    return torch.concat([assets,prices],0)
+    equityHoldingsJ = tensList[...,equity].reshape(J,L-1)
+    bondholdingsJ = tensList[...,bond].reshape(J,L-1)
+    pricesJ = tensList[...,prices].repeat(J,1)
+    return torch.concat([equityHoldingsJ,bondholdingsJ,pricesJ],-1)
