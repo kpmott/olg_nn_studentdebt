@@ -4,7 +4,7 @@ This code accompanies Mott (2022): "Life-Cycle Student Debt and Asset Prices."
 # The Neural Network
 Let the neural network be represented by the function $\Gamma(\cdot|\Theta)$, where $\Theta$ is the parameters of the model (weights and biases). The function maps $\Gamma: \mathbb{X} \to \mathbb{Y}$ where $\mathbb{X} \subseteq \mathbb{R}^{2\times J\times (L-1) + J\times L + 2}$ and $\mathbb{Y} \subseteq \mathbb{R}^{2\times J\times (L-1) + 2 }$. Denote elements of $\mathbb{X} \ni X$ and $\mathbb{Y} \ni Y$ so that $\Gamma(X|\Theta)=Y$.
 $$
-\begin{align*}
+\begin{aligned}
 \Gamma&: & \mathbb{X} &\to \mathbb{Y} \\
 \Gamma&: & \begin{pmatrix}
 \left[\begin{array}{c}
@@ -23,7 +23,7 @@ Y_t \\
 p_t \\
 q_t
 \end{pmatrix}
-\end{align*}$$
+\end{aligned}$$
 
 For calculations of equilibrium conditions, I sometimes wish to manipulate the input and output vectors to matrices according to the following transformations:
 

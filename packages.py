@@ -16,7 +16,7 @@ import numpy as np
 
 #normal distribution and solver, respectively
 from scipy.stats import norm
-from scipy.optimize import fsolve, minimize
+from scipy.optimize import fsolve, minimize, root_scalar
 
 #floor and ceiling functions
 from math import floor, ceil

@@ -10,7 +10,7 @@ import detSS
 """
 
 #for use later: detSS allocs and prices
-ebar,bbar,pbar,qbar,xbar,cbar = detSS.detSS_allocs()
+ebar,bbar,pbar,qbar,cbar = detSS.detSS_allocs()
 
 #loss function for comparing "output" to labels
 loss = nn.MSELoss()
@@ -24,15 +24,20 @@ class custAct(nn.Module):
     #e,b∈[0,1] (Tanh)
     #p,q>0 (SoftPlus)
     def forward(self,x):
-        nn_tanh = nn.Tanh()
+        #nn_tanh = nn.Tanh()
         nn_sp = nn.Softplus()
-        
-        act1 = nn_tanh(x[...,equity])
-        act2 = nn_tanh(x[...,bond])
+        nn_relu = nn.ReLU()
+
+        x = typeOut(x)
+
+        act1 = nn_relu(x[...,equity])
+        act2 = x[...,bond]
         act3 = nn_sp(x[...,price])
         act4 = nn_sp(x[...,ir])
         
-        return torch.concat([act1,act2,act3,act4],dim=-1)
+        x = torch.concat([act1,act2,act3,act4],dim=-1)
+        
+        return vecOut(x)
 
 #THIS IS THE NEURAL NETWORK!
 class MODEL(pl.LightningModule):
@@ -72,7 +77,7 @@ class MODEL(pl.LightningModule):
         self.model.eval()
         
         #Given x, calculate predictions 
-        y_pred = self.model(x)
+        y_pred = typeOut(self.model(x))
 
         #-------------------------------------------------------------------------------------
         #Allocations/prices from predictions: TODAY

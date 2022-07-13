@@ -9,11 +9,11 @@ from params import *
 
 def detSS_allocs():
     
+    #everything to numpy
     y_np = y.cpu().numpy()
-    debtEndow_np = debtEndow.cpu().numpy()
+    debtPay_np = debtPay.cpu().numpy()
     τ_np = τ.cpu().numpy()
     δ_np = δ.cpu().numpy()
-    ω_np = ω.cpu().numpy()
 
     #compute lifetime consumption based on equity holdings e0 and prices p0
     def c_eq(e0,p0):
@@ -22,11 +22,11 @@ def detSS_allocs():
         
         #vector of consumption in each period 
         cons = np.zeros((L,J))
-        cons[0,:] = y_np[:,0,:] - p0[0]*e0[0,:] - a*debtEndow_np[:,0,:] - τ_np[:,0,:]
-        cons[-1,:] = y_np[:,-1,:] + (δ_np+p0[-1])*e0[-1,:] - a*debtEndow_np[:,-1,:] - τ_np[:,-1,:]
+        cons[0,:] = y_np[:,0,:] - p0[0]*e0[0,:] - debtPay_np[:,0,:] - τ_np[:,0,:]
+        cons[-1,:] = y_np[:,-1,:] + (δ_np+p0[-1])*e0[-1,:] - debtPay_np[:,-1,:] - τ_np[:,-1,:]
         
         for i in range(1,L-1):
-            cons[i,:] = y_np[:,i,:] + (δ_np+p0[i])*e0[i-1,:] - p0[i]*e0[i,:] - a*debtEndow_np[:,i,:] - τ_np[:,i,:]
+            cons[i,:] = y_np[:,i,:] + (δ_np+p0[i])*e0[i-1,:] - p0[i]*e0[i,:] - debtPay_np[:,i,:] - τ_np[:,i,:]
         
         return cons
 
@@ -47,10 +47,10 @@ def detSS_allocs():
         #Euler equations
         ssVec = np.zeros((L-1,J))
         for i in range(0,L-1):
-            ssVec[i,:] = p*up(cons[i,:]) - β*(p+δ_np)*up(cons[i+1,:])
+            ssVec[i,:] = p*up(cons[i,:]) - β*(p+δ_np)*up(cons[i+1,:]) 
         #market clearing
         ssVec = ssVec.flatten()
-        ssVec = np.concatenate([ssVec,np.array([1-np.sum(e*ω_np[:,:-1,:])])])
+        ssVec = np.concatenate([ssVec,np.array([1-np.sum(e)])])
 
         #in equilibrium all of these conditions should be zero: pass to solver 
         return ssVec
@@ -59,11 +59,10 @@ def detSS_allocs():
         return np.sum(ss_eq(x))
         
     #Guess equity is hump-shaped
-    eguess = np.repeat(norm.pdf(range(1,L),wp,wp-1),J)
-    #eguess = [1/(J*(L-1)) for i in range(J*(L-1))]
-    eguess = [x/sum(eguess)*J*L for x in eguess] 
+    eguess = np.repeat(norm.pdf(range(1,L),wp,wp),J)
+    eguess = [x/sum(eguess) for x in eguess] 
     
-    pguess = .05 + 2*floor(L/30)
+    pguess = .25 + 2*floor(L/30)
     guess = [*eguess,*[pguess]]
 
     #if the solver can't find detSS: quit
@@ -79,12 +78,22 @@ def detSS_allocs():
         qbar = 1/((pbar+δ)/pbar) #bond price: equalize return to equity return 
         cbar = torch.tensor(c_eq(torch.squeeze(ebar).cpu().numpy(),pbar.flatten().cpu().numpy()*np.ones(L))).reshape((1,L,J)).float() #consumption
 
-        return ebar,bbar,pbar,qbar,cbar
+    return ebar,bbar,pbar,qbar,cbar
 
-ebar,bbar,pbar,qbar,cbar = detSS_allocs()
+def Plots():
+    ebar,bbar,pbar,qbar,cbar = detSS_allocs()
 
-lblsNums=['j='+str(j)+': ' for j in range(J)]
-lblsWords=['HS','CommColl','Coll']
-lbls=[lblsNums[j]+lblsWords[j] for j in range(J)]
-plt.plot(torch.squeeze(cbar.cpu()));plt.legend(lbls);plt.title('detSS Consumption');plt.savefig('.detSS_C.png');plt.clf()
-plt.plot(torch.squeeze(ω[:,:-1,:].cpu()*ebar.cpu()));plt.legend(lbls);plt.title('detSS Equity');plt.savefig('.detSS_E.png');plt.clf()
+    lblsNums=['j='+str(j)+': ' for j in range(J)]
+    lblsWords=['HS','Community College','College']
+    lbls=[lblsNums[j]+lblsWords[j] for j in range(J)]
+    figsize = (6,3)
+
+    plt.figure(figsize=figsize);plt.plot(torch.squeeze(cbar.cpu()));plt.legend(lbls);plt.title('detSS Consumption');plt.xlabel("i");plt.yticks([]);plt.xticks([i for i in range(L)]);plt.savefig('.detSS_C.png');plt.clf()
+    plt.figure(figsize=figsize);plt.plot(torch.squeeze(ebar.cpu()));plt.legend(lbls);plt.title('detSS Equity Ownership');plt.xlabel("i");plt.xticks([i for i in range(L-1)]);plt.savefig('.detSS_E.png');plt.clf()
+
+    os.system("cp .detSS_C.png /home/kpmott/Dropbox/Apps/Overleaf/Dissertation/1_ApplicationStudent/")
+    os.system("mv /home/kpmott/Dropbox/Apps/Overleaf/Dissertation/1_ApplicationStudent/.detSS_C.png /home/kpmott/Dropbox/Apps/Overleaf/Dissertation/1_ApplicationStudent/detSS_C.png")
+    os.system("cp .detSS_E.png /home/kpmott/Dropbox/Apps/Overleaf/Dissertation/1_ApplicationStudent/")
+    os.system("mv /home/kpmott/Dropbox/Apps/Overleaf/Dissertation/1_ApplicationStudent/.detSS_E.png /home/kpmott/Dropbox/Apps/Overleaf/Dissertation/1_ApplicationStudent/detSS_E.png")
+
+#Plots()
