@@ -1,4 +1,3 @@
-#STILL TO DO 
 from params import *
 from packages import *
 import detSS
@@ -13,7 +12,7 @@ import detSS
 ebar,bbar,pbar,qbar,cbar = detSS.detSS_allocs()
 
 #loss function for comparing "output" to labels
-loss = nn.MSELoss()
+loss = nn.MSELoss(reduction='sum')
 
 #This is a custom activation function for the output layer
 class custAct(nn.Module):
@@ -24,12 +23,12 @@ class custAct(nn.Module):
     #e,b∈[0,1] (Tanh)
     #p,q>0 (SoftPlus)
     def forward(self,x):
-        #nn_tanh = nn.Tanh()
+        nn_sig = nn.Sigmoid()
+        nn_tanh = nn.Tanh()
         nn_sp = nn.Softplus()
-        nn_relu = nn.ReLU()
 
-        act1 = nn_relu(x[...,equity])
-        act2 = x[...,bond]
+        act1 = nn_sig(x[...,equity])
+        act2 = nn_tanh(x[...,bond])
         act3 = nn_sp(x[...,prices])
         
         x = torch.concat([act1,act2,act3],dim=-1)
@@ -45,16 +44,16 @@ class MODEL(pl.LightningModule):
         super().__init__()
         
         #Network architecture parameters
-        sizes = [input,2048,2048,1024,1024,output]
+        sizes = [input,2048,1024,output]
         
         #Network architecture 
-        dp=0.2 #dropout parameter
+        dp=0.05 #dropout parameter
         self.model = nn.Sequential(
             nn.Linear(in_features=sizes[0],out_features=sizes[1]),nn.ReLU(),nn.Dropout(p=dp),
             nn.Linear(in_features=sizes[1],out_features=sizes[2]),nn.ReLU(),nn.Dropout(p=dp),
-            nn.Linear(in_features=sizes[2],out_features=sizes[3]),nn.ReLU(),nn.Dropout(p=dp),
-            nn.Linear(in_features=sizes[3],out_features=sizes[4]),nn.ReLU(),nn.Dropout(p=dp),
-            nn.Linear(in_features=sizes[4],out_features=sizes[5]),custAct() #output uses custom activation function 
+            #nn.Linear(in_features=sizes[2],out_features=sizes[3]),nn.ReLU(),nn.Dropout(p=dp),
+            #nn.Linear(in_features=sizes[3],out_features=sizes[4]),nn.ReLU(),nn.Dropout(p=dp),
+            nn.Linear(in_features=sizes[2],out_features=sizes[3]),custAct() #output uses custom activation function 
         )
         
         #which loss function to use throughout: declared above 
@@ -187,7 +186,7 @@ class MODEL(pl.LightningModule):
     
     #define the optimizer 
     def configure_optimizers(self):
-        lr=1e-7
+        lr=1e-6
         return Adam(self.model.parameters(), lr=lr)
 
 #make sure we're on GPU 
@@ -214,22 +213,20 @@ class CustDataSet(Dataset):
         X[0] = torch.concat([ebar.flatten(),bbar.flatten(),yhist[0].flatten(),Yhist[0,0],δhist[0,0]],0)
         Y[0] = model(X[0])
         for t in range(1,T):
-            eLag = Y[t-1,equity]
-            bLag = Y[t-1,bond]
-            X[t] = torch.concat([eLag.flatten(),bLag.flatten(),yhist[t].flatten(),Yhist[t,0],δhist[t,0]],0)
+            X[t] = torch.concat([Y[t-1,equity],Y[t-1,bond],yhist[t].flatten(),Yhist[t,0],δhist[t,0]],0)
             Y[t] = model(X[t])
         
         #lop off burn period
-        #X, Y = X[time], Y[time]
+        X, Y = X[time], Y[time]
         
         #training inputs
         self.X = X.detach().clone()
 
         #training labels: if pretrain then detSS otherwise zeros
         if pretrain:
-            self.Y = torch.ones(T,output)*torch.concat([ebar.flatten(),bbar.flatten(),pbar.flatten(),qbar.flatten()],0)
+            self.Y = torch.ones(train,output)*torch.concat([ebar.flatten(),bbar.flatten(),pbar.flatten(),qbar.flatten()],0)
         else:
-            self.Y = torch.zeros(T).float()
+            self.Y = torch.zeros(train).float()
 
         model.train() #turn on dropout for training
 

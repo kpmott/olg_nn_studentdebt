@@ -12,10 +12,10 @@ from nn import *
 data = CustDataSet(pretrain=True) 
 
 #load training data into DataLoader object for batching (ON GPU)
-train_loader = DataLoader(data,batch_size=50,generator=torch.Generator(device="cuda"),shuffle=True)
+train_loader = DataLoader(data,batch_size=50,generator=torch.Generator(device="cuda"),shuffle=True,num_workers=0)
 
 #define and fit the trainer
-trainer = pl.Trainer(max_epochs=5000, accelerator="gpu",logger=False,enable_checkpointing=False)
+trainer = pl.Trainer(max_epochs=200, accelerator="gpu",logger=False,enable_checkpointing=False)
 trainer.fit(model=model,train_dataloaders=train_loader)
 
 #------------------------------------------------------------------------------------------------------
@@ -42,10 +42,10 @@ for thyme in tqdm(range(iters)):
     trainer.fit(model=model,train_dataloaders=train_loader)
     
     #check loss, plot
-    losses = model.losscalc(data.X)
-    lossrun = loss(losses,losses*0).cpu().detach().numpy()
-    losshist[thyme] = lossrun
-    plt.plot(losshist[:thyme+1]);plt.yscale('log');plt.savefig('plot_losses.png');plt.clf()
-    if lossrun < ϵ:
-        print("Convergence in "+str(thyme)+" steps.")
-        break
+    # losses = model.losscalc(data.X)
+    # lossrun = loss(losses,losses*0).cpu().detach().numpy()
+    # losshist[thyme] = lossrun
+    # plt.plot(losshist[:thyme+1]);plt.yscale('log');plt.savefig('plot_losses.png');plt.clf()
+    # if lossrun < ϵ:
+    #     print("Convergence in "+str(thyme)+" steps.")
+    #     break

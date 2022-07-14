@@ -24,7 +24,7 @@ rp = L - wp
 
 #Endowments: HK and debt for types j∈{0,1,2}, calibrated for relative incomes
 #https://educationdata.org/student-loan-debt-by-income-level
-hkEndow = torch.ones((1,L,J))*torch.tensor([100,123.6,171.9]) 
+hkEndow = torch.ones((1,L,J))*torch.tensor([100,123.6,171.9])/100 
 
 #flags
 isWorker = torch.concat([torch.ones((1,wp,J)),torch.zeros(1,rp,J)],-2)
@@ -98,7 +98,7 @@ debtEndow = y[:,0,:]*torch.tensor([0,.44,.59]).reshape((1,1,J))
 λ = -0.025
 
 def ϕ(b):
-    return torch.where(torch.greater(b,0.),0.,λ*b)
+    return b*0#torch.where(torch.greater(b,0.),0.,λ*b)
 
 #--------------------------------------------------------------------------------
 #Annualize rates
@@ -130,7 +130,7 @@ debtPay = debtEndow*amortPay*isWorker
 taxRev = torch.sum(debtEndow[:,0,:]) - torch.sum(debtPay)
 
 #tax/transfer 
-τ = y*isEducated
+τ = y*isWorker
 τ /= torch.sum(τ)
 τ *= taxRev
 
