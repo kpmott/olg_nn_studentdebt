@@ -3,7 +3,7 @@ from packages import *
 #EVERYTHING IS INDEXED [t,i,j]
 #Except when it needs to be a single vector
 
-#--------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
 #economic parameters
 
 #Lifespan of agents
@@ -24,21 +24,27 @@ rp = L - wp
 
 #Endowments: HK and debt for types j∈{0,1,2}, calibrated for relative incomes
 #https://educationdata.org/student-loan-debt-by-income-level
-hkEndow = torch.ones((1,L,J))*torch.tensor([100,123.6,171.9])/100 
+hkEndow = (torch.ones((1,L,J))*torch.tensor([100,123.6,171.9])/100).to(device)
 
 #flags
-isWorker = torch.concat([torch.ones((1,wp,J)),torch.zeros(1,rp,J)],-2)
-isRetired = torch.concat([torch.zeros((1,wp,J)),torch.ones(1,rp,J)],-2)
-isEducated = torch.concat([torch.zeros(1,L,1),torch.ones(1,L,J-1)],-1)
+isWorker = torch.concat(
+    [torch.ones((1,wp,J)),torch.zeros(1,rp,J)],
+    -2).to(device)
+isRetired = torch.concat(
+    [torch.zeros((1,wp,J)),torch.ones(1,rp,J)],
+    -2).to(device)
+isEducated = torch.concat(
+    [torch.zeros(1,L,1),torch.ones(1,L,J-1)],
+    -1).to(device)
 
-#--------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
 #stochastics 
 probs = [0.5, 0.5] #prob of each state
 S = len(probs)  #number of states
 ζ = 0.05 #aggregate shock size 
-shocks = torch.tensor([1-ζ,1+ζ])
+shocks = torch.tensor([1-ζ,1+ζ]).to(device)
 
-#--------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
 #utility function 
 
 #Risk-aversion coeff
@@ -59,7 +65,7 @@ def up(x):
 def upinv(x):
     return x**(1/γ)
 
-#--------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
 #production function
 ξ = 0.25
 
@@ -70,7 +76,7 @@ def production():
     #h^(1-ξ)
     H = torch.sum(hkEndow)
 
-    return barH**ξ*H**(1-ξ)
+    return (barH**ξ*H**(1-ξ)).to(device)
 
 
 def wage():
@@ -80,19 +86,19 @@ def wage():
     #{\bar h}^ξ
     H = torch.sum(hkEndow)
 
-    return barH**ξ*H**(-ξ)*(1-ξ)
+    return (barH**ξ*H**(-ξ)*(1-ξ)).to(device)
     
 
-F = production()
-Fprime = wage()
+F = production().to(device)
+Fprime = wage().to(device)
 y = Fprime*hkEndow*isWorker
 δ = F - torch.sum(y)
 
 #Calibrate debt to match percent of income
 #https://educationdata.org/student-loan-debt-by-income-level
-debtEndow = y[:,0,:]*torch.tensor([0,.44,.59]).reshape((1,1,J))
+debtEndow = y[:,0,:]*torch.tensor([0,.44,.59]).reshape((1,1,J)).to(device)
 
-#--------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
 #borrowing cost function
 #borrowing cost parameter
 λ = -0.025
@@ -100,7 +106,7 @@ debtEndow = y[:,0,:]*torch.tensor([0,.44,.59]).reshape((1,1,J))
 def ϕ(b):
     return b*0#torch.where(torch.greater(b,0.),0.,λ*b)
 
-#--------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
 #Annualize rates
 #r in my model --> r in one year
 def annualize(r):
@@ -110,7 +116,7 @@ def annualize(r):
 def periodize(r):
     return (1+r)**(60/L)-1
 
-#--------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
 #amortization function
 #student debt interest rate
 
@@ -134,7 +140,7 @@ taxRev = torch.sum(debtEndow[:,0,:]) - torch.sum(debtPay)
 τ /= torch.sum(τ)
 τ *= taxRev
 
-#--------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
 #time path 
 
 T = 12500 #number of periods to simulate
@@ -148,12 +154,14 @@ def SHOCKS():
     shocks = range(S)
     
     #Shock history:
-    shist = torch.tensor(np.random.choice(shocks,T,probs),dtype=torch.int32).reshape((T,1,1))
+    shist = torch.tensor(
+        np.random.choice(shocks,T,probs),dtype=torch.int32).reshape((T,1,1))\
+        .to(device)
     zhist = shist*ζ*2-ζ + 1
 
     return shist, zhist
 
-#--------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
 #input
 
 #input dims
@@ -167,7 +175,7 @@ resources = slice(-2,-1,1)
 divs = slice(-1,input,1)
 aggState = slice(-2,input,1) #aggregate quantities state variables
 
-#--------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
 # output
 #        assets    + prices
 output = N*J*(L-1) + N
@@ -187,9 +195,27 @@ bondJ    = slice(L-1   ,2*L-2  ,1)
 priceJ   = slice(2*L-2 ,2*L-1  ,1)
 irJ      = slice(2*L-1 ,2*L    ,1)
 
-#This takes in output tensor (list) and returns output tensor (matrix: rows are types)
+#output tensor (list) → output tensor (matrix: rows are types)
 def typeOut(tensList):
     equityHoldingsJ = tensList[...,equity].reshape(J,L-1)
     bondholdingsJ = tensList[...,bond].reshape(J,L-1)
     pricesJ = tensList[...,prices].repeat(J,1)
-    return torch.concat([equityHoldingsJ,bondholdingsJ,pricesJ],-1)
+    return torch.concat([equityHoldingsJ,bondholdingsJ,pricesJ],-1).to(device)
+
+#-------------------------------------------------------------------------------
+#Tensor operations for later
+def padAssets(ASSETS,yLen,side=0):
+            ASSETSJ = ASSETS.reshape(yLen,L-1,J)
+            if side==0:
+                ASSETSJpad = nn.functional.pad(ASSETSJ,(1,0))
+            else:
+                ASSETSJpad = nn.functional.pad(ASSETSJ,(0,1))
+            return torch.flatten(ASSETSJpad,start_dim=-2).to(device)
+
+def padAssetsF(ASSETS,yLen,side=0):
+            ASSETSJ = ASSETS.reshape(S,yLen,L-1,J)
+            if side==0:
+                ASSETSJpad = nn.functional.pad(ASSETSJ,(1,0))
+            else:
+                ASSETSJpad = nn.functional.pad(ASSETSJ,(0,1))
+            return torch.flatten(ASSETSJpad,start_dim=-2).to(device)

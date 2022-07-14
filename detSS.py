@@ -1,7 +1,7 @@
 from packages import *
 from params import *
 
-#-----------------------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
 #to solve for deterministic steady state (detSS) allocations, prices
 #these are used as a starting point from which to train
 
@@ -20,11 +20,14 @@ def detSS_allocs():
         
         #vector of consumption in each period 
         cons = np.zeros((L,J))
-        cons[0,:] = y_np[:,0,:] - p0[0]*e0[0,:] - debtPay_np[:,0,:] - τ_np[:,0,:]
-        cons[-1,:] = y_np[:,-1,:] + (δ_np+p0[-1])*e0[-1,:] - debtPay_np[:,-1,:] - τ_np[:,-1,:]
+        cons[0,:] = y_np[:,0,:] - p0[0]*e0[0,:] \
+            - debtPay_np[:,0,:] - τ_np[:,0,:]
+        cons[-1,:] = y_np[:,-1,:] + (δ_np+p0[-1])*e0[-1,:] \
+            - debtPay_np[:,-1,:] - τ_np[:,-1,:]
         
         for i in range(1,L-1):
-            cons[i,:] = y_np[:,i,:] + (δ_np+p0[i])*e0[i-1,:] - p0[i]*e0[i,:] - debtPay_np[:,i,:] - τ_np[:,i,:]
+            cons[i,:] = y_np[:,i,:] + (δ_np+p0[i])*e0[i-1,:] \
+                - p0[i]*e0[i,:] - debtPay_np[:,i,:] - τ_np[:,i,:]
         
         return cons
 
@@ -69,12 +72,18 @@ def detSS_allocs():
         exit()
     else:
         #solution
-        bar = torch.tensor(fsolve(ss_eq,[*eguess,*[pguess]],full_output=0,maxfev=int(10e8))).float()
+        bar = torch.tensor(
+            fsolve(ss_eq,[*eguess,*[pguess]],full_output=0,maxfev=int(10e8)))\
+                .float().to(device)
         ebar = bar[0:-1].reshape((1,L-1,J)) #equity
         bbar = ebar*0 #bond: 0
         pbar = bar[-1].reshape((1,1,1)) #equity price
         qbar = 1/((pbar+δ)/pbar) #bond price: equalize return to equity return 
-        cbar = torch.tensor(c_eq(torch.squeeze(ebar).cpu().numpy(),pbar.flatten().cpu().numpy()*np.ones(L))).reshape((1,L,J)).float() #consumption
+        cbar = torch.tensor(
+            c_eq(
+                torch.squeeze(ebar).cpu().numpy(),
+                pbar.flatten().cpu().numpy()*np.ones(L))
+            ).reshape((1,L,J)).float().to(device) #consumption
 
     return ebar,bbar,pbar,qbar,cbar
 
@@ -86,12 +95,26 @@ def Plots():
     lbls=[lblsNums[j]+lblsWords[j] for j in range(J)]
     figsize = (6,3)
 
-    plt.figure(figsize=figsize);plt.plot(torch.squeeze(cbar.cpu()));plt.legend(lbls);plt.title('detSS Consumption');plt.xlabel("i");plt.yticks([]);plt.xticks([i for i in range(L)]);plt.savefig('.detSS_C.png');plt.clf()
-    plt.figure(figsize=figsize);plt.plot(torch.squeeze(ebar.cpu()));plt.legend(lbls);plt.title('detSS Equity Ownership');plt.xlabel("i");plt.xticks([i for i in range(L-1)]);plt.savefig('.detSS_E.png');plt.clf()
+    plt.figure(figsize=figsize);plt.plot(torch.squeeze(cbar.cpu()));\
+        plt.legend(lbls);plt.title('detSS Consumption');plt.xlabel("i");\
+        plt.yticks([]);plt.xticks([i for i in range(L)]);\
+        plt.savefig('.detSS_C.png');plt.clf()
+    plt.figure(figsize=figsize);plt.plot(torch.squeeze(ebar.cpu()));\
+        plt.legend(lbls);plt.title('detSS Equity Ownership');plt.xlabel("i");\
+        plt.xticks([i for i in range(L-1)]);\
+        plt.savefig('.detSS_E.png');plt.clf()
 
-    os.system("cp .detSS_C.png /home/kpmott/Dropbox/Apps/Overleaf/Dissertation/1_ApplicationStudent/")
-    os.system("mv /home/kpmott/Dropbox/Apps/Overleaf/Dissertation/1_ApplicationStudent/.detSS_C.png /home/kpmott/Dropbox/Apps/Overleaf/Dissertation/1_ApplicationStudent/detSS_C.png")
-    os.system("cp .detSS_E.png /home/kpmott/Dropbox/Apps/Overleaf/Dissertation/1_ApplicationStudent/")
-    os.system("mv /home/kpmott/Dropbox/Apps/Overleaf/Dissertation/1_ApplicationStudent/.detSS_E.png /home/kpmott/Dropbox/Apps/Overleaf/Dissertation/1_ApplicationStudent/detSS_E.png")
+    os.system("cp .detSS_C.png /home/kpmott/Dropbox/Apps/Overleaf/Dissertation/\
+        1_ApplicationStudent/")
+    os.system("mv /home/kpmott/Dropbox/Apps/Overleaf/Dissertation/\
+        1_ApplicationStudent/.detSS_C.png \
+        /home/kpmott/Dropbox/Apps/Overleaf/Dissertation\
+        /1_ApplicationStudent/detSS_C.png")
+    os.system("cp .detSS_E.png /home/kpmott/Dropbox/Apps/Overleaf/Dissertation/\
+        1_ApplicationStudent/")
+    os.system("mv /home/kpmott/Dropbox/Apps/Overleaf/Dissertation/\
+        1_ApplicationStudent/.detSS_E.png \
+        /home/kpmott/Dropbox/Apps/Overleaf/Dissertation/\
+        1_ApplicationStudent/detSS_E.png")
 
 #Plots()

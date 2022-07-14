@@ -7,6 +7,7 @@ torch.set_default_tensor_type('torch.cuda.FloatTensor') #put everything on GPU
 import torch.nn as nn #neural network tools
 from torch.optim import Adam #this is my optimizer (fancy SGD)
 from torch.utils.data import DataLoader, Dataset #batching tools
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 #pytorch lightning: automated training wrapper 
 import pytorch_lightning as pl
