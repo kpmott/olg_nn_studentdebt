@@ -5,63 +5,56 @@ from packages import *
 from params import *
 from nn import *
 
-#-------------------------------------------------------------------------------
-#STEP 1: PRETRAINING
-
-#generate pretraining data: labels are detSS
-data = CustDataSet(pretrain=True) 
-
-#load training data into DataLoader object for batching (ON GPU)
-train_loader = DataLoader(
-    data,batch_size=50,generator=torch.Generator(device=device),
-    shuffle=True,num_workers=0
-)
-
-#define and fit the trainer
-trainer = pl.Trainer(
-    max_epochs=50, accelerator="gpu",logger=False,enable_checkpointing=False
-)
-#trainer.fit(model=model,train_dataloaders=train_loader)
-
-#-------------------------------------------------------------------------------
-#STEP 2: MAIN TRAINING
-
-#maximum iterations
-iters = 100
-
-#list of losses to track over training cycle
-losshist = np.zeros((iters))
-
-#machine tolerance: end when loss is below this
-ϵ = 1e-3
-
-#training loop: Draw data from unique path of shocks. 
-#Train with batch_size=__ for one epoch. Then repeat
-for thyme in tqdm(range(iters)):
-    model.to(device)    
-    #draw data and load (ON GPU) into DataLoader for batching
-    data = CustDataSet()
-    train_loader = DataLoader(
-        data,batch_size=32,generator=torch.Generator(device="cuda"),shuffle=True
-    )
+def pretrain_loop(epochs=100,lr=1e-6):
     
-    #define trainer
-    trainer = pl.Trainer(
-        max_epochs=1, accelerator="gpu",logger=False,
-        enable_checkpointing=False,enable_model_summary=False
-    )
-    trainer.fit(model=model,train_dataloaders=train_loader)
+    #generate pretraining data: labels are detSS
+    data = CustDataSet(pretrain=True) 
     
-    model.to(device)
-    model.eval()
-    # check loss, plot
-    losses = model.losscalc(data.X).detach()
-    lossrun = model.loss(losses,losses*0).cpu().detach().numpy()
-    losshist[thyme] = lossrun
-    model.train()
-    plt.plot(losshist[:thyme+1]);plt.yscale('log');\
-        plt.savefig('.plot_losses.png');plt.clf()
-    if lossrun < ϵ:
-        print("Convergence in "+str(thyme)+" steps.")
-        break
-    torch.cuda.empty_cache()
+    for epoch in range(epochs):
+
+        #load training data into DataLoader object for batching (ON GPU)
+        train_loader = DataLoader(
+            data,batch_size=50,generator=torch.Generator(device=device),
+            shuffle=True,num_workers=0
+        )
+
+        #optimizer
+        optimizer = Adam(model.parameters(), lr=lr)
+
+        #actual loop
+        for batch, (X,y) in enumerate(train_loader):
+            y_pred = model(X)
+            lossval = loss(y_pred,y)
+
+            optimizer.zero_grad()
+            lossval.backward()
+            optimizer.step()
+        
+        #after loop: what is loss?
+        print(lossval.item())
+
+def train_loop(epochs=100,lr=1e-8):
+    
+    for epoch in range(epochs):
+        #generate pretraining data: labels are detSS
+        data = CustDataSet(pretrain=False) 
+
+        #load training data into DataLoader object for batching (ON GPU)
+        train_loader = DataLoader(
+            data,batch_size=32,generator=torch.Generator(device=device),
+            shuffle=True,num_workers=0
+        )
+
+        #optimizer
+        optimizer = Adam(model.parameters(), lr=lr)
+
+        #actual loop
+        for batch, (X,y) in enumerate(train_loader):
+            lossval = loss(model.losscalc(X),y)
+
+            optimizer.zero_grad()
+            lossval.backward()
+            optimizer.step()
+        
+        #after loop: what is loss?
+        print(lossval.item())
