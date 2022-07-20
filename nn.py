@@ -21,7 +21,7 @@ class custAct(nn.Module):
     
     #here I define the activation function: it takes in [e,b,p,q]
     def forward(self,x):
-        nn_eq = nn.ReLU() #since ownerships must sum to unity
+        nn_eq = nn.Tanh() #since ownerships must sum to unity
         nn_bond = nn.Tanh() #roughly expected in [-1,1]?
         nn_prices = nn.Softplus() #strictly positive
 
