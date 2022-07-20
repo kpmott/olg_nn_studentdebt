@@ -20,7 +20,7 @@ wp = 3
 rp = L - wp
 
 #Time discount rate
-β = .985**(60/L)
+β = 1.#.985**(60/L)
 
 #Endowments: HK and debt for types j∈{0,1,2}, calibrated for relative incomes
 #https://educationdata.org/student-loan-debt-by-income-level
@@ -41,14 +41,14 @@ isEducated = torch.concat(
 #stochastics 
 probs = [0.5, 0.5] #prob of each state
 S = len(probs)  #number of states
-ζ = 0.05 #aggregate shock size 
+ζ = 0.035 #aggregate shock size 
 shocks = torch.tensor([1-ζ,1+ζ]).to(device)
 
 #-------------------------------------------------------------------------------
 #utility function 
 
 #Risk-aversion coeff
-γ = 3.
+γ = 2.25
 
 #utility
 def u(x):
@@ -63,7 +63,10 @@ def up(x):
 
 #inverse of utility derivative
 def upinv(x):
-    return x**(1/γ)
+    if γ == 0:
+        return x
+    else:
+        return x**(1/γ)
 
 #-------------------------------------------------------------------------------
 #production function
@@ -101,10 +104,10 @@ debtEndow = y[:,0,:]*torch.tensor([0,.44,.59]).reshape((1,1,J)).to(device)
 #-------------------------------------------------------------------------------
 #borrowing cost function
 #borrowing cost parameter
-λ = -0.025
+λ = 0#-0.025
 
 def ϕ(b):
-    return b*0#torch.where(torch.greater(b,0.),0.,λ*b)
+    return torch.where(torch.greater(b,0.),torch.zeros(b.shape),λ*b)
 
 #-------------------------------------------------------------------------------
 #Annualize rates
@@ -205,17 +208,17 @@ def typeOut(tensList):
 #-------------------------------------------------------------------------------
 #Tensor operations for later
 def padAssets(ASSETS,yLen,side=0):
-            ASSETSJ = ASSETS.reshape(yLen,L-1,J)
-            if side==0:
-                ASSETSJpad = nn.functional.pad(ASSETSJ,(1,0))
-            else:
-                ASSETSJpad = nn.functional.pad(ASSETSJ,(0,1))
-            return torch.flatten(ASSETSJpad,start_dim=-2).to(device)
+    ASSETSJ = ASSETS.reshape(yLen,L-1,J)
+    if side==0:
+        ASSETSJpad = nn.functional.pad(ASSETSJ,(1,0))
+    else:
+        ASSETSJpad = nn.functional.pad(ASSETSJ,(0,1))
+    return torch.flatten(ASSETSJpad,start_dim=-2).to(device)
 
 def padAssetsF(ASSETS,yLen,side=0):
-            ASSETSJ = ASSETS.reshape(S,yLen,L-1,J)
-            if side==0:
-                ASSETSJpad = nn.functional.pad(ASSETSJ,(1,0))
-            else:
-                ASSETSJpad = nn.functional.pad(ASSETSJ,(0,1))
-            return torch.flatten(ASSETSJpad,start_dim=-2).to(device)
+    ASSETSJ = ASSETS.reshape(S,yLen,L-1,J)
+    if side==0:
+        ASSETSJpad = nn.functional.pad(ASSETSJ,(1,0))
+    else:
+        ASSETSJpad = nn.functional.pad(ASSETSJ,(0,1))
+    return torch.flatten(ASSETSJpad,start_dim=-2).to(device)

@@ -12,7 +12,7 @@ import detSS
 ebar,bbar,pbar,qbar,cbar = detSS.detSS_allocs()
 
 #loss function for comparing "output" to labels
-loss = nn.MSELoss(reduction='sum')
+loss = nn.L1Loss()#nn.MSELoss(reduction='mean')
 
 #This is a custom activation function for the output layer
 class custAct(nn.Module):
@@ -21,13 +21,14 @@ class custAct(nn.Module):
     
     #here I define the activation function: it takes in [e,b,p,q]
     def forward(self,x):
-        nn_sig = nn.Sigmoid()
-        nn_tanh = nn.Tanh()
-        nn_sp = nn.Softplus()
+        nn_eq = nn.ReLU() #since ownerships must sum to unity
+        nn_bond = nn.Tanh() #roughly expected in [-1,1]?
+        nn_prices = nn.Softplus() #strictly positive
 
-        act1 = nn_tanh(x[...,equity])
-        act2 = nn_tanh(x[...,bond])
-        act3 = nn_sp(x[...,prices])
+        act1 = nn_eq(x[...,equity])
+        act2 = nn_bond(x[...,bond])
+        #act2 = act2 - torch.mean(act2)
+        act3 = nn_prices(x[...,prices])
         
         x = torch.concat([act1,act2,act3],dim=-1).to(device)
         
@@ -42,16 +43,18 @@ class MODEL(nn.Module):
         super().__init__()
         
         #Network architecture parameters
-        sizes = [input,2048,1024,output]
+        sizes = [input,2048,2048,1024,output]
         
         #Network architecture 
-        dp=0.05 #dropout parameter
+        dp=0.2 #dropout parameter
         self.model = nn.Sequential(
             nn.Linear(in_features=sizes[0],out_features=sizes[1]),
             nn.ReLU(),nn.Dropout(p=dp),
             nn.Linear(in_features=sizes[1],out_features=sizes[2]),
             nn.ReLU(),nn.Dropout(p=dp),
             nn.Linear(in_features=sizes[2],out_features=sizes[3]),
+            nn.ReLU(),nn.Dropout(p=dp),
+            nn.Linear(in_features=sizes[3],out_features=sizes[4]),
             custAct() #output uses custom activation function 
         )
         
@@ -98,9 +101,9 @@ class MODEL(nn.Module):
             - ϕ(padAssets(B,yLen=yLen,side=1))
 
         #Penalty if Consumption is negative 
-        ϵc = 1e-6
+        ϵc = 1e-8
         C = torch.maximum(Chat,ϵc*(Chat*0+1))
-        cpen = -torch.sum(torch.less(Chat,0)*Chat/ϵc) 
+        cpen = -torch.sum(torch.less(Chat,0)*Chat/ϵc,-1)[:,None]
 
         #-----------------------------------------------------------------------
         #1-PERIOD FORECAST: for Euler expectations
@@ -113,7 +116,7 @@ class MODEL(nn.Module):
             torch.concat([y.flatten(),F.reshape(1),δ.reshape(1)],0))\
             [:,None,:].repeat(1,yLen,1) 
         #full state variable tomorrow 
-        Xf = torch.concat([endog,exog],-1).float() 
+        Xf = torch.concat([endog,exog],-1).float().detach()
         #predictions for forecast values 
         Yf = self.model(Xf).detach() 
 
@@ -141,27 +144,26 @@ class MODEL(nn.Module):
             - ϕ(padAssetsF(Bf,yLen=yLen,side=1))
 
         #Euler Errors: equity then bond: THIS IS JUST E[MR]-1=0
-        eqEuler = torch.sum(
-            torch.abs(torch.tensordot(β*up(Cf[...,1:])\
-            /up(C[...,:-1])*(Pf+Δf_)/P,torch.tensor(probs),dims=([0],[0])) -1),
-            -1)
-        bondEuler = torch.sum(
-            torch.abs(torch.tensordot(β*up(Cf[...,1:])/up(C[...,:-1])\
-                /Q,torch.tensor(probs),dims=([0],[0])) -1),
-            -1)
+        eqEuler = torch.abs(torch.tensordot(β*up(Cf[...,1:])\
+            /up(C[...,:-1])*(Pf+Δf_)/P,torch.tensor(probs),dims=([0],[0])) -1
+        )
+        bondEuler = torch.abs(torch.tensordot(β*up(Cf[...,1:])/up(C[...,:-1])\
+            /Q,torch.tensor(probs),dims=([0],[0])) -1
+        )
 
         #Market Clearing Errors
-        equityMCC = torch.abs(1-torch.sum(E,-1))
-        bondMCC = torch.abs(torch.sum(B,-1))
+        equityMCC = torch.abs(1-torch.sum(E,-1))[:,None]
+        bondMCC = torch.abs(torch.sum(B,-1))[:,None]
 
         #so in each period, the error is the sum of above
         #EULERS + MCCs + consumption penalty 
-        loss_vec = eqEuler + bondEuler + equityMCC + bondMCC + cpen
+        loss_vec = torch.concat([eqEuler,bondEuler,equityMCC,bondMCC,cpen],-1)
 
         #set model back to training (dropout back on)
         self.model.train()
 
-        return loss_vec
+        p=2
+        return torch.mean(loss_vec**p,-1)**(1/p)
 
     
 #make sure we're on GPU 
@@ -170,10 +172,10 @@ model = MODEL()#.to(device)
 #This generates the training data
 class CustDataSet(Dataset):
     def __init__(self,pretrain=False):
+        model.eval() #turn off dropout
         
         #ignore gradients: faster
         with torch.no_grad():
-            model.eval() #turn off dropout
             
             #state variables: X
             #prediction variables: Y
