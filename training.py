@@ -64,6 +64,7 @@ def train_loop(epochs=100,batchsize=32,lr=1e-8,losses=[]):
 
             optimizer.zero_grad()
             lossval.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), .2)
             optimizer.step()
         
         losses.append(np.mean(batchloss))

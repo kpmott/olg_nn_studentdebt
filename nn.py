@@ -21,7 +21,7 @@ class custAct(nn.Module):
     
     #here I define the activation function: it takes in [e,b,p,q]
     def forward(self,x):
-        nn_eq = nn.Tanh() #since ownerships must sum to unity
+        nn_eq = nn.Softmax(dim=-1) #since ownerships must sum to unity
         nn_bond = nn.Tanh() #roughly expected in [-1,1]?
         nn_prices = nn.Softplus() #strictly positive
 
@@ -144,16 +144,28 @@ class MODEL(nn.Module):
             - ϕ(padAssetsF(Bf,yLen=yLen,side=1))
 
         #Euler Errors: equity then bond: THIS IS JUST E[MR]-1=0
-        eqEuler = torch.abs(torch.tensordot(β*up(Cf[...,1:])\
-            /up(C[...,:-1])*(Pf+Δf_)/P,torch.tensor(probs),dims=([0],[0])) -1
-        )
-        bondEuler = torch.abs(torch.tensordot(β*up(Cf[...,1:])/up(C[...,:-1])\
-            /Q,torch.tensor(probs),dims=([0],[0])) -1
-        )
+        #FIX THE C,CF TO REMOVE YOUNGEST AND OLDEST
+        Ceuler = C.reshape(yLen,L,J)[...,:-1,:].reshape(yLen,(L-1)*J)
+        Cfeuler = Cf.reshape(S,yLen,L,J)[...,:-1,:].reshape(S,yLen,(L-1)*J)
+        eqEuler = torch.mean(
+            torch.abs(
+            upinv(β*torch.tensordot(up(Cfeuler)*(Pf+Δf_)
+            ,torch.tensor(probs),dims=([0],[0]))/P)/Ceuler
+            -1),
+            -1
+        )[:,None]
+
+        bondEuler = torch.mean(
+            torch.abs(
+            upinv(β*torch.tensordot(up(Cfeuler)
+            ,torch.tensor(probs),dims=([0],[0]))/Q)/Ceuler
+            -1),
+            -1
+        )[:,None]
 
         #Market Clearing Errors
         equityMCC = torch.abs(1-torch.sum(E,-1))[:,None]
-        bondMCC = torch.abs(torch.sum(B,-1))[:,None]
+        bondMCC =   torch.abs(torch.sum(B,-1))[:,None]
 
         #so in each period, the error is the sum of above
         #EULERS + MCCs + consumption penalty 
@@ -163,7 +175,7 @@ class MODEL(nn.Module):
         self.model.train()
 
         p=2
-        return torch.mean(loss_vec**p,-1)**(1/p)
+        return torch.sum(loss_vec**p,-1)**(1/p)
 
     
 #make sure we're on GPU 

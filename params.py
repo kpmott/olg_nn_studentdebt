@@ -20,7 +20,7 @@ wp = 3
 rp = L - wp
 
 #Time discount rate
-β = 1.#.985**(60/L)
+β = .985**(60/L)
 
 #Endowments: HK and debt for types j∈{0,1,2}, calibrated for relative incomes
 #https://educationdata.org/student-loan-debt-by-income-level
@@ -104,10 +104,10 @@ debtEndow = y[:,0,:]*torch.tensor([0,.44,.59]).reshape((1,1,J)).to(device)
 #-------------------------------------------------------------------------------
 #borrowing cost function
 #borrowing cost parameter
-λ = 0#-0.025
+λ = -0.025
 
 def ϕ(b):
-    return torch.where(torch.greater(b,0.),torch.zeros(b.shape),λ*b)
+    return torch.where(torch.greater_equal(b,0.),torch.zeros(b.shape),λ*b)
 
 #-------------------------------------------------------------------------------
 #Annualize rates
