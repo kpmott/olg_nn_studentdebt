@@ -5,7 +5,7 @@ from nn import *
 savePrePath = './.pretrained_model_params.pt'
 savePath = './.trained_model_params.pt'
 model.eval()
-model.load_state_dict(torch.load(savePrePath))
+model.load_state_dict(torch.load(savePath))
 
 data = CustDataSet()
 model.eval()
@@ -32,7 +32,7 @@ Chat = y_ + (P+Δ_)*E_ + B_ \
     - ϕ(padAssets(B,yLen=yLen,side=1))
 
 #Penalty if Consumption is negative 
-ϵc = 1e-8
+ϵc = 1e-12
 C = torch.maximum(Chat,ϵc*(Chat*0+1))
 cpen = -torch.sum(torch.less(Chat,0)*Chat/ϵc,-1)[:,None]
 
@@ -75,20 +75,35 @@ Cf = yf_ + (Pf+Δf_)*Ef_ + Bf_ \
     - ϕ(padAssetsF(Bf,yLen=yLen,side=1))
 
 #Euler Errors: equity then bond: THIS IS JUST E[MR]-1=0
-eqEuler = torch.abs(torch.tensordot(β*up(Cf[...,1:])\
-    /up(C[...,:-1])*(Pf+Δf_)/P,torch.tensor(probs),dims=([0],[0])) -1
-)
-bondEuler = torch.abs(torch.tensordot(β*up(Cf[...,1:])/up(C[...,:-1])\
-    /Q,torch.tensor(probs),dims=([0],[0])) -1
-)
+#FIX THE C,CF TO REMOVE YOUNGEST AND OLDEST
+Ceuler = C.reshape(yLen,L,J)[...,:-1,:].reshape(yLen,(L-1)*J)
+Cfeuler = Cf.reshape(S,yLen,L,J)[...,:-1,:].reshape(S,yLen,(L-1)*J)
+eqEuler = torch.mean(
+    torch.abs(
+    upinv(β*torch.tensordot(up(Cfeuler)*(Pf+Δf_)
+    ,torch.tensor(probs),dims=([0],[0]))/P)/Ceuler
+    -1),
+    -1
+)[:,None]
+
+bondEuler = torch.mean(
+    torch.abs(
+    upinv(β*torch.tensordot(up(Cfeuler)
+    ,torch.tensor(probs),dims=([0],[0]))/Q)/Ceuler
+    -1),
+    -1
+)[:,None]
 
 #Market Clearing Errors
 equityMCC = torch.abs(1-torch.sum(E,-1))[:,None]
-bondMCC = torch.abs(torch.sum(B,-1))[:,None]
+bondMCC =   torch.abs(torch.sum(B,-1))[:,None]
 
 #so in each period, the error is the sum of above
 #EULERS + MCCs + consumption penalty 
 loss_vec = torch.concat([eqEuler,bondEuler,equityMCC,bondMCC,cpen],-1)
 
+#set model back to training (dropout back on)
+model.train()
+
 p=2
-torch.mean(loss_vec**p,-1)**(1/p)
+torch.sum(loss_vec**p,-1)**(1/p)

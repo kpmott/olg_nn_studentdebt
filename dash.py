@@ -17,9 +17,9 @@ savePath = './.trained_model_params.pt'
 
 if savePretrain:
     losses = pretrain_loop(epochs=1000,batchsize=50,lr=1e-4)
-    #losses = pretrain_loop(epochs=1000,batchsize=50,lr=1e-5,losses=losses)
-    #losses = pretrain_loop(epochs=1000,batchsize=100,lr=1e-6,losses=losses)
-    #losses = pretrain_loop(epochs=1000,batchsize=175,lr=1e-6,losses=losses)
+    losses = pretrain_loop(epochs=1000,batchsize=50,lr=1e-5,losses=losses)
+    losses = pretrain_loop(epochs=1000,batchsize=100,lr=1e-6,losses=losses)
+    losses = pretrain_loop(epochs=1000,batchsize=175,lr=1e-6,losses=losses)
 
     model.eval()
     torch.save(model.state_dict(), savePrePath)
@@ -31,9 +31,16 @@ if savePretrain:
 if not savePretrain:
     model.load_state_dict(torch.load(savePrePath))
 
-losses = train_loop(epochs=1000,batchsize=32,lr=1e-6)
-losses = train_loop(epochs=1000,batchsize=64,lr=5e-7,losses=losses)
+losses = train_loop(epochs=1000,batchsize=64,lr=1e-7)
+if saveTrain:
+    model.eval()
+    torch.save(model.state_dict(), savePath)
+    model.train()
 
+# model.load_state_dict(torch.load(savePath))
+
+losses=[]
+losses = train_loop(epochs=1000,batchsize=200,lr=1e-7,losses=losses)
 if saveTrain:
     model.eval()
     torch.save(model.state_dict(), savePath)

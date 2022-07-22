@@ -66,6 +66,7 @@ def train_loop(epochs=100,batchsize=32,lr=1e-8,losses=[]):
             lossval.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), .2)
             optimizer.step()
+            del lossval
         
         losses.append(np.mean(batchloss))
         
@@ -75,4 +76,5 @@ def train_loop(epochs=100,batchsize=32,lr=1e-8,losses=[]):
                 plt.xlabel("Epoch");plt.savefig('.plot_losses.png');\
                 plt.clf()
         
+        torch.cuda.empty_cache()
     return losses

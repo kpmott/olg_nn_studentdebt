@@ -43,10 +43,10 @@ class MODEL(nn.Module):
         super().__init__()
         
         #Network architecture parameters
-        sizes = [input,2048,2048,1024,output]
+        sizes = [input,2048,2048,2048,output]
         
         #Network architecture 
-        dp=0.2 #dropout parameter
+        dp=0.0 #dropout parameter
         self.model = nn.Sequential(
             nn.Linear(in_features=sizes[0],out_features=sizes[1]),
             nn.ReLU(),nn.Dropout(p=dp),
@@ -109,57 +109,56 @@ class MODEL(nn.Module):
         #1-PERIOD FORECAST: for Euler expectations
         #state variable construction 
         
-        #lagged asset holdings tomorrow are endog. asset holdings today 
-        endog = torch.concat([E,B],-1)[None].repeat(S,1,1) 
-        #state contingent vars
-        exog = torch.outer(shocks,
-            torch.concat([y.flatten(),F.reshape(1),δ.reshape(1)],0))\
-            [:,None,:].repeat(1,yLen,1) 
-        #full state variable tomorrow 
-        Xf = torch.concat([endog,exog],-1).float().detach()
-        #predictions for forecast values 
-        Yf = self.model(Xf).detach() 
+        with torch.no_grad():
+            #lagged asset holdings tomorrow are endog. asset holdings today 
+            endog = torch.concat([E,B],-1)[None].repeat(S,1,1) 
+            #state contingent vars
+            exog = torch.outer(shocks,
+                torch.concat([y.flatten(),F.reshape(1),δ.reshape(1)],0))\
+                [:,None,:].repeat(1,yLen,1) 
+            #full state variable tomorrow 
+            Xf = torch.concat([endog,exog],-1).float().detach()
+            #predictions for forecast values 
+            Yf = self.model(Xf)
 
-        #Allocations/prices from forecast predictions: TOMORROW (f := forecast)
-        Ef = Yf[...,equity] #equity forecast
-        Bf = Yf[...,bond] #bond forecast
-        Pf = Yf[...,eqprice] #equity price forecast
-        Qf = Yf[...,bondprice] #bond price forecast
-        
-        #BC accounting: consumption 
-        #equity forecast lags
-        Ef_ = padAssets(E,yLen=yLen,side=0)[None].repeat(S,1,1) 
-        #bond forecase lags
-        Bf_ = padAssets(B,yLen=yLen,side=0)[None].repeat(S,1,1) 
-        #endowment realization
-        yf_ = Xf[...,incomes] 
-        #dividend realization
-        Δf_ = Xf[...,divs] 
-        #cons forecast
-        Cf = yf_ + (Pf+Δf_)*Ef_ + Bf_ \
-            - Pf*padAssetsF(Ef,yLen=yLen,side=1) \
-            - Qf*padAssetsF(Bf,yLen=yLen,side=1) \
-            - debtPay.flatten()*torch.ones(S,yLen,L*J).to(device) \
-            - τ.flatten()*torch.ones(S,yLen,L*J).to(device) \
-            - ϕ(padAssetsF(Bf,yLen=yLen,side=1))
+            #Allocations/prices from forecast predictions: 
+            #TOMORROW (f := forecast)
+            Ef = Yf[...,equity] #equity forecast
+            Bf = Yf[...,bond] #bond forecast
+            Pf = Yf[...,eqprice] #equity price forecast
+            Qf = Yf[...,bondprice] #bond price forecast
+            
+            #BC accounting: consumption 
+            #equity forecast lags
+            Ef_ = padAssets(E,yLen=yLen,side=0)[None].repeat(S,1,1) 
+            #bond forecase lags
+            Bf_ = padAssets(B,yLen=yLen,side=0)[None].repeat(S,1,1) 
+            #endowment realization
+            yf_ = Xf[...,incomes] 
+            #dividend realization
+            Δf_ = Xf[...,divs] 
+            #cons forecast
+            Cf = yf_ + (Pf+Δf_)*Ef_ + Bf_ \
+                - Pf*padAssetsF(Ef,yLen=yLen,side=1) \
+                - Qf*padAssetsF(Bf,yLen=yLen,side=1) \
+                - debtPay.flatten()*torch.ones(S,yLen,L*J).to(device) \
+                - τ.flatten()*torch.ones(S,yLen,L*J).to(device) \
+                - ϕ(padAssetsF(Bf,yLen=yLen,side=1))
 
         #Euler Errors: equity then bond: THIS IS JUST E[MR]-1=0
-        #FIX THE C,CF TO REMOVE YOUNGEST AND OLDEST
-        Ceuler = C.reshape(yLen,L,J)[...,:-1,:].reshape(yLen,(L-1)*J)
-        Cfeuler = Cf.reshape(S,yLen,L,J)[...,:-1,:].reshape(S,yLen,(L-1)*J)
         eqEuler = torch.mean(
             torch.abs(
-            upinv(β*torch.tensordot(up(Cfeuler)*(Pf+Δf_)
-            ,torch.tensor(probs),dims=([0],[0]))/P)/Ceuler
-            -1),
+            torch.tensordot(β*up(Cf[...,isNotYoungest])/up(C[...,isNotOldest])\
+            *(Pf+Δf_)/P
+            ,torch.tensor(probs),dims=([0],[0])) -1),
             -1
         )[:,None]
 
         bondEuler = torch.mean(
             torch.abs(
-            upinv(β*torch.tensordot(up(Cfeuler)
-            ,torch.tensor(probs),dims=([0],[0]))/Q)/Ceuler
-            -1),
+            torch.tensordot(β*up(Cf[...,isNotYoungest])/up(C[...,isNotOldest])\
+            *1/Q
+            ,torch.tensor(probs),dims=([0],[0])) -1),
             -1
         )[:,None]
 

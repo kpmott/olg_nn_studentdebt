@@ -37,6 +37,13 @@ isEducated = torch.concat(
     [torch.zeros(1,L,1),torch.ones(1,L,J-1)],
     -1).to(device)
 
+isNotOldest = torch.where(
+    torch.tensor([i%L for i in range(J*L)]).float()==0,False,True
+)
+isNotYoungest = torch.where(
+    torch.tensor([i%L for i in range(J*L)]).float()==L-1,False,True
+)
+
 #-------------------------------------------------------------------------------
 #stochastics 
 probs = [0.5, 0.5] #prob of each state
