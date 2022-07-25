@@ -1,6 +1,6 @@
 from packages import *
 
-#EVERYTHING IS INDEXED [t,i,j]
+#EVERYTHING IS INDEXED [t,j,i]
 #Except when it needs to be a single vector
 
 #-------------------------------------------------------------------------------
@@ -24,18 +24,20 @@ rp = L - wp
 
 #Endowments: HK and debt for types j∈{0,1,2}, calibrated for relative incomes
 #https://educationdata.org/student-loan-debt-by-income-level
-hkEndow = (torch.ones((1,L,J))*torch.tensor([100,123.6,171.9])/100).to(device)
+hkEndow = \
+    (torch.ones((1,J,L))*torch.tensor([[100],[123.6],[171.9]]).repeat(1,L)/100)\
+    .to(device)
 
 #flags
 isWorker = torch.concat(
-    [torch.ones((1,wp,J)),torch.zeros(1,rp,J)],
-    -2).to(device)
-isRetired = torch.concat(
-    [torch.zeros((1,wp,J)),torch.ones(1,rp,J)],
-    -2).to(device)
-isEducated = torch.concat(
-    [torch.zeros(1,L,1),torch.ones(1,L,J-1)],
+    [torch.ones((1,J,wp)),torch.zeros(1,J,rp)],
     -1).to(device)
+isRetired = torch.concat(
+    [torch.zeros((1,J,wp)),torch.ones(1,J,rp)],
+    -1).to(device)
+isEducated = torch.concat(
+    [torch.zeros(1,1,L),torch.ones(1,J-1,L)],
+    -2).to(device)
 
 isNotYoungest = torch.where(
     torch.tensor([i%L for i in range(J*L)]).float()==0,False,True
@@ -84,7 +86,7 @@ def production():
     barH = torch.sum(hkEndow*isEducated*isWorker)/torch.sum(isEducated*isWorker)
     
     #h^(1-ξ)
-    H = torch.sum(hkEndow)
+    H = torch.sum(hkEndow*isWorker)
 
     return (barH**ξ*H**(1-ξ)).to(device)
 
@@ -94,7 +96,7 @@ def wage():
     barH = torch.sum(hkEndow*isEducated*isWorker)/torch.sum(isEducated*isWorker)
 
     #{\bar h}^ξ
-    H = torch.sum(hkEndow)
+    H = torch.sum(hkEndow*isWorker)
 
     return (barH**ξ*H**(-ξ)*(1-ξ)).to(device)
     
@@ -106,7 +108,7 @@ y = Fprime*hkEndow*isWorker
 
 #Calibrate debt to match percent of income
 #https://educationdata.org/student-loan-debt-by-income-level
-debtEndow = y[:,0,:]*torch.tensor([0,.44,.59]).reshape((1,1,J)).to(device)
+debtEndow = (y[:,:,0]*torch.tensor([0,.44,.59]).to(device))[:,:,None]
 
 #-------------------------------------------------------------------------------
 #borrowing cost function
@@ -143,10 +145,10 @@ amortPay = amort()
 debtPay = debtEndow*amortPay*isWorker
 
 #how much total tax revenue to raise
-taxRev = torch.sum(debtEndow[:,0,:]) - torch.sum(debtPay)
+taxRev = torch.sum(debtEndow[:,:,0]) - torch.sum(debtPay)
 
 #tax/transfer 
-τ = y[0,0,:]*torch.ones(1,L,J)
+τ = y[0,:,0][:,None]*torch.ones(1,J,L)
 τ /= torch.sum(τ)
 τ *= taxRev
 

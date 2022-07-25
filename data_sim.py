@@ -111,6 +111,7 @@ with torch.no_grad():
 linestyle = ['-','--',':']
 linecolor = ['k','b','r']
 plottime = slice(-150,train,1)
+figsize = (10,4)
 
 #FIX LIFE-CYCLE PLOTS TO GRAB FROM SAME AGENT'S ACTUAL LIFE
 #Consumption plot
@@ -121,6 +122,7 @@ for j in range(J):
         for i in range(L):
             Clife[t,i,j] = Cj[t+i,i,j]
 
+plt.figure(figsize=figsize)
 for j in range(J):
     plt.plot(
         Clife[plottime,:,j].detach().cpu().t(),linestyle[j]+linecolor[j]
@@ -133,6 +135,7 @@ plt.legend(handles=
     for j in range(J)]
 )
 plt.savefig('.c.png');plt.clf()
+plt.close()
 
 #Bond plot
 Blife = torch.zeros(train-L,L-1,J)
@@ -141,7 +144,7 @@ for j in range(J):
     for t in range(train-L):
         for i in range(L-1):
             Blife[t,i,j] = Bj[t+i,i,j]
-
+plt.figure(figsize=figsize)
 for j in range(J):
     plt.plot(
         Blife[plottime,:,j].detach().cpu().t(),linestyle[j]+linecolor[j]
@@ -154,6 +157,7 @@ plt.legend(handles=
     for j in range(J)]
 )
 plt.savefig('.b.png');plt.clf()
+plt.close()
 
 #Equity plot
 Elife = torch.zeros(train-L,L-1,J)
@@ -162,7 +166,7 @@ for j in range(J):
     for t in range(train-L):
         for i in range(L-1):
             Elife[t,i,j] = Ej[t+i,i,j]
-
+plt.figure(figsize=figsize)
 for j in range(J):
     plt.plot(
         Elife[plottime,:,j].detach().cpu().t(),linestyle[j]+linecolor[j]
@@ -175,20 +179,25 @@ plt.legend(handles=
     for j in range(J)]
 )
 plt.savefig('.e.png');plt.clf()
+plt.close()
 
 #Equity price plot
 pplot = P[plottime]
+plt.figure(figsize=figsize)
 plt.plot(pplot.detach().cpu(),'k-')
 plt.title('Equity Price')
 plt.xticks([])
 plt.savefig('.p.png');plt.clf()
+plt.close()
 
 #Bond price plot
 qplot = Q[plottime]
+plt.figure(figsize=figsize)
 plt.plot(qplot.detach().cpu(),'k-')
 plt.title('Bond Price')
 plt.xticks([])
 plt.savefig('.q.png');plt.clf()
+plt.close()
 
 #Excess return 
 Δ = x[...,divs]
@@ -196,10 +205,12 @@ eqRet = annualize((P[1:] + Δ[1:])/P[:-1])
 bondRet = annualize(1/Q[:-1])
 exRet = eqRet-bondRet
 exRetplot = exRet[plottime]
+plt.figure(figsize=figsize)
 plt.plot(exRetplot.detach().cpu(),'k-')
 plt.title('Excess Return')
 plt.xticks([])
 plt.savefig('.exret.png');plt.clf()
+plt.close()
 
 #---------------------------------------------------------------------------
 #Individual returns
@@ -207,6 +218,7 @@ rets = annualize(
     ((P[1:train-L,None]+Δ[1:train-L,None])*Elife[:-1] + Blife[:-1]) \
         / (P[:train-L-1,None]*Elife[:-1] + Q[:train-L-1,None]*Blife[:-1]) 
 )
+plt.figure(figsize=figsize)
 for j in range(J):  
     plt.plot(
         rets[plottime,:,j].detach().cpu().t(),linestyle[j]+linecolor[j]
@@ -219,6 +231,7 @@ plt.legend(handles=
     for j in range(J)]
 )
 plt.savefig('.rets.png');plt.clf()
+plt.close()
 
 #---------------------------------------------------------------------------
 #Expected utility
@@ -227,3 +240,8 @@ EU = torch.mean(
         u(Clife),torch.tensor([β**i for i in range(L)]),dims=([1],[0])
     ),0
 )
+plt.figure(figsize=figsize)
+plt.bar([j for j in range(J)],EU.cpu())
+plt.xticks([j for j in range(J)]);plt.xlabel('j')
+plt.title('Expected Utility')
+plt.savefig('.EU.png');plt.clf();plt.close()

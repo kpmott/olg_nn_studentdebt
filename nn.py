@@ -12,7 +12,7 @@ import detSS
 ebar,bbar,pbar,qbar,cbar = detSS.detSS_allocs()
 
 #loss function for comparing "output" to labels
-loss = nn.L1Loss()#nn.MSELoss(reduction='mean')
+loss = nn.L1Loss()
 
 #This is a custom activation function for the output layer
 class custAct(nn.Module):
@@ -96,8 +96,8 @@ class MODEL(nn.Module):
         Δ_ = x[...,divs] #state-contingent dividend
         Chat = y_ + (P+Δ_)*E_ + B_ \
             - P*padAssets(E,yLen=yLen,side=1) - Q*padAssets(B,yLen=yLen,side=1)\
-            - debtPay.permute(0,2,1).flatten()*torch.ones(yLen,L*J).to(device) \
-            - τ.permute(0,2,1).flatten()*torch.ones(yLen,L*J).to(device) \
+            - debtPay.flatten()*torch.ones(yLen,L*J).to(device) \
+            - τ.flatten()*torch.ones(yLen,L*J).to(device) \
             - ϕ(padAssets(B,yLen=yLen,side=1))
 
         #Penalty if Consumption is negative 
@@ -141,24 +141,26 @@ class MODEL(nn.Module):
             Cf = yf_ + (Pf+Δf_)*Ef_ + Bf_ \
                 - Pf*padAssetsF(Ef,yLen=yLen,side=1) \
                 - Qf*padAssetsF(Bf,yLen=yLen,side=1) \
-                - debtPay.permute(0,2,1).flatten()*torch.ones(S,yLen,L*J).to(device) \
-                - τ.permute(0,2,1).flatten()*torch.ones(S,yLen,L*J).to(device) \
+                - debtPay.flatten()*torch.ones(S,yLen,L*J).to(device) \
+                - τ.flatten()*torch.ones(S,yLen,L*J).to(device) \
                 - ϕ(padAssetsF(Bf,yLen=yLen,side=1))
 
         #Euler Errors: equity then bond: THIS IS JUST E[MR]-1=0
-        eqEuler = torch.abs(
+        eqEuler = torch.mean(torch.abs(
             β*torch.tensordot(up(Cf[...,isNotYoungest])*(Pf+Δf_)
             ,torch.tensor(probs),dims=([0],[0]))/(up(C[...,isNotOldest])*P) - 1.
-        )
+            ),-1
+        )[:,None]
 
-        bondEuler = torch.abs(
+        bondEuler = torch.mean(torch.abs(
             β*torch.tensordot(up(Cf[...,isNotYoungest])
             ,torch.tensor(probs),dims=([0],[0]))/(up(C[...,isNotOldest])*Q) - 1.
-        )
+            ),-1
+        )[:,None]
 
         #Market Clearing Errors
         equityMCC = torch.abs(1-torch.sum(E,-1))[:,None]
-        bondMCC =   torch.abs(torch.sum(B,-1))[:,None]
+        bondMCC   = torch.abs(torch.sum(B,-1))[:,None]
 
         #so in each period, the error is the sum of above
         #EULERS + MCCs + consumption penalty 
@@ -199,15 +201,15 @@ class CustDataSet(Dataset):
             X = torch.zeros(T,input).to(device)
             Y = torch.zeros(T,output).to(device)
             X[0] = torch.concat(
-                [ebar.permute(0,2,1).flatten(),bbar.permute(0,2,1).flatten(),
-                yhist.permute(0,2,1)[0].flatten(),Yhist[0,0],δhist[0,0]],
+                [ebar.flatten(),bbar.flatten(),
+                yhist[0].flatten(),Yhist[0,0],δhist[0,0]],
                 0
             )
             Y[0] = model(X[0])
             for t in range(1,T):
                 X[t] = torch.concat(
                     [Y[t-1,equity],Y[t-1,bond],
-                    yhist.permute(0,2,1)[t].flatten(),Yhist[t,0],δhist[t,0]],
+                    yhist[t].flatten(),Yhist[t,0],δhist[t,0]],
                     0
                 )
                 Y[t] = model(X[t])

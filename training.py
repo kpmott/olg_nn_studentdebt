@@ -34,16 +34,19 @@ def pretrain_loop(epochs=100,batchsize=50,lr=1e-6,losses=[]):
 
         losses.append(np.mean(batchloss))
         
+        figsize = (10,4)
         if epoch%20 ==0:
+            plt.figure(figsize=figsize)
             plt.plot(losses);plt.yscale('log');\
-                plt.title("Pre-Train Losses: "+"{:.2e}".format(losses[-1]));\
-                plt.xlabel("Epoch");plt.savefig('.plot_prelosses.png');\
-                plt.clf()
+            plt.title("Pre-Train Losses: "+"{:.2e}".format(losses[-1]));\
+            plt.xlabel("Epoch");plt.savefig('.plot_prelosses.png');\
+            plt.clf()
+            plt.close()
 
     return losses
         
 def train_loop(epochs=100,batchsize=32,lr=1e-8,losses=[]):
-    tol = 1e-2
+    tol = 1e-3
 
     for epoch in tqdm(range(epochs)):
         #generate pretraining data: labels are detSS
@@ -71,10 +74,14 @@ def train_loop(epochs=100,batchsize=32,lr=1e-8,losses=[]):
         epochloss = np.mean(batchloss)
         losses.append(epochloss)
         
+        figsize = (10,4)
+
+        plt.figure(figsize=figsize)
         plt.plot(losses);plt.yscale('log');\
-            plt.title("Losses: "+"{:.2e}".format(losses[-1]));\
-            plt.xlabel("Epoch");plt.savefig('.plot_losses.png');\
-            plt.clf()
+        plt.title("Losses: "+"{:.2e}".format(losses[-1]));\
+        plt.xlabel("Epoch");plt.savefig('.plot_losses.png');\
+        plt.clf()
+        plt.close()
 
         if epochloss < tol:
             break
