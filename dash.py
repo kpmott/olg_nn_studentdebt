@@ -15,32 +15,37 @@ savePath = './.trained_model_params.pt'
 #-------------------------------------------------------------------------------
 #STEP 1: PRETRAINING
 
-if savePretrain:
-    losses = pretrain_loop(epochs=1000,batchsize=50,lr=1e-4)
-    losses = pretrain_loop(epochs=1000,batchsize=50,lr=1e-5,losses=losses)
-    losses = pretrain_loop(epochs=1000,batchsize=100,lr=1e-6,losses=losses)
-    losses = pretrain_loop(epochs=1000,batchsize=175,lr=1e-6,losses=losses)
+# if savePretrain:
+#     losses = pretrain_loop(epochs=1000,batchsize=50,lr=1e-4)
+#     losses = pretrain_loop(epochs=1000,batchsize=50,lr=1e-5,losses=losses)
+#     #losses = pretrain_loop(epochs=1000,batchsize=100,lr=1e-6,losses=losses)
+#     #losses = pretrain_loop(epochs=1000,batchsize=175,lr=1e-6,losses=losses)
 
-    model.eval()
-    torch.save(model.state_dict(), savePrePath)
-    model.train()
+#     model.eval()
+#     torch.save(model.state_dict(), savePrePath)
+#     model.train()
 
-#-------------------------------------------------------------------------------
-#STEP 2: MAIN TRAINING
+# #-------------------------------------------------------------------------------
+# #STEP 2: MAIN TRAINING
 
-if not savePretrain:
-    model.load_state_dict(torch.load(savePrePath))
+# if not savePretrain:
+#     model.load_state_dict(torch.load(savePrePath))
 
-losses = train_loop(epochs=1000,batchsize=64,lr=1e-7)
+#model.load_state_dict(torch.load(savePath))
+
+losses = train_loop(epochs=375,batchsize=32,lr=1e-5)
 if saveTrain:
     model.eval()
     torch.save(model.state_dict(), savePath)
     model.train()
 
-# model.load_state_dict(torch.load(savePath))
+losses = train_loop(epochs=375,batchsize=64,lr=1e-6,losses=losses)
+if saveTrain:
+    model.eval()
+    torch.save(model.state_dict(), savePath)
+    model.train()
 
-losses=[]
-losses = train_loop(epochs=1000,batchsize=200,lr=1e-7,losses=losses)
+losses = train_loop(epochs=375,batchsize=128,lr=1e-7,losses=losses)
 if saveTrain:
     model.eval()
     torch.save(model.state_dict(), savePath)

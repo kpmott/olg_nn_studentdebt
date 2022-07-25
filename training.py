@@ -24,11 +24,11 @@ def pretrain_loop(epochs=100,batchsize=50,lr=1e-6,losses=[]):
         #actual loop
         batchloss = []
         for batch, (X,y) in enumerate(train_loader):
+            optimizer.zero_grad()
             y_pred = model(X)
             lossval = loss(y_pred,y)
             batchloss.append(lossval.item())
 
-            optimizer.zero_grad()
             lossval.backward()
             optimizer.step()
 
@@ -43,6 +43,8 @@ def pretrain_loop(epochs=100,batchsize=50,lr=1e-6,losses=[]):
     return losses
         
 def train_loop(epochs=100,batchsize=32,lr=1e-8,losses=[]):
+    tol = 1e-2
+
     for epoch in tqdm(range(epochs)):
         #generate pretraining data: labels are detSS
         data = CustDataSet(pretrain=False) 
@@ -59,22 +61,24 @@ def train_loop(epochs=100,batchsize=32,lr=1e-8,losses=[]):
         #actual loop
         batchloss = []
         for batch, (X,y) in enumerate(train_loader):
+                
+            optimizer.zero_grad()
             lossval = loss(model.losscalc(X),y)
             batchloss.append(lossval.item())
-
-            optimizer.zero_grad()
-            lossval.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), .2)
+            lossval.backward()#create_graph=True)
             optimizer.step()
-            del lossval
         
-        losses.append(np.mean(batchloss))
+        epochloss = np.mean(batchloss)
+        losses.append(epochloss)
         
-        if epoch%1==0:
-            plt.plot(losses);plt.yscale('log');\
-                plt.title("Losses: "+"{:.2e}".format(losses[-1]));\
-                plt.xlabel("Epoch");plt.savefig('.plot_losses.png');\
-                plt.clf()
+        plt.plot(losses);plt.yscale('log');\
+            plt.title("Losses: "+"{:.2e}".format(losses[-1]));\
+            plt.xlabel("Epoch");plt.savefig('.plot_losses.png');\
+            plt.clf()
+
+        if epochloss < tol:
+            break
         
         torch.cuda.empty_cache()
+    
     return losses

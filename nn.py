@@ -46,7 +46,7 @@ class MODEL(nn.Module):
         sizes = [input,2048,2048,2048,output]
         
         #Network architecture 
-        dp=0.0 #dropout parameter
+        dp=0.175 #dropout parameter
         self.model = nn.Sequential(
             nn.Linear(in_features=sizes[0],out_features=sizes[1]),
             nn.ReLU(),nn.Dropout(p=dp),
@@ -70,7 +70,7 @@ class MODEL(nn.Module):
     
     #This is the ECONOMIC loss function: 
     #sum of Euler residuals + Market Clearing Conditions (MCCs)
-    def losscalc(self,x):
+    def losscalc(self,x,full_loss=False):
         
         #make sure we're on GPU
         #self.model.to(device)
@@ -146,21 +146,18 @@ class MODEL(nn.Module):
                 - ϕ(padAssetsF(Bf,yLen=yLen,side=1))
 
         #Euler Errors: equity then bond: THIS IS JUST E[MR]-1=0
-        eqEuler = torch.mean(
-            torch.abs(
-            torch.tensordot(β*up(Cf[...,isNotYoungest])/up(C[...,isNotOldest])\
-            *(Pf+Δf_)/P
-            ,torch.tensor(probs),dims=([0],[0])) -1),
-            -1
-        )[:,None]
+        eqEuler = torch.abs(
+            β*torch.tensordot(up(Cf[...,isNotYoungest])*(Pf+Δf_)
+            ,torch.tensor(probs),dims=([0],[0]))/(up(C[...,isNotOldest])*P) - 1.
+        )
 
-        bondEuler = torch.mean(
-            torch.abs(
-            torch.tensordot(β*up(Cf[...,isNotYoungest])/up(C[...,isNotOldest])\
-            *1/Q
-            ,torch.tensor(probs),dims=([0],[0])) -1),
-            -1
-        )[:,None]
+        torch.sum(torch.abs(β*torch.tensordot(up(Cf[...,isNotYoungest])*(Pf+Δf_)
+            ,torch.tensor(probs),dims=([0],[0]))/(up(C[...,isNotOldest])) - P),-1)
+
+        bondEuler = torch.abs(
+            β*torch.tensordot(up(Cf[...,isNotYoungest])
+            ,torch.tensor(probs),dims=([0],[0]))/(up(C[...,isNotOldest])*Q) - 1.
+        )
 
         #Market Clearing Errors
         equityMCC = torch.abs(1-torch.sum(E,-1))[:,None]
@@ -173,8 +170,12 @@ class MODEL(nn.Module):
         #set model back to training (dropout back on)
         self.model.train()
 
-        p=2
-        return torch.sum(loss_vec**p,-1)**(1/p)
+        if full_loss:
+            return loss_vec
+        else:
+            p=2
+            return torch.sum(loss_vec**p,-1)**(1/p)
+        #return torch.log(torch.sum(loss_vec,-1)+1)
 
     
 #make sure we're on GPU 
@@ -235,3 +236,4 @@ class CustDataSet(Dataset):
     #return index batches
     def __getitem__(self,idx):
         return self.X[idx], self.Y[idx]
+

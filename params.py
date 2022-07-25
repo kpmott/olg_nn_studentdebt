@@ -20,7 +20,7 @@ wp = 3
 rp = L - wp
 
 #Time discount rate
-β = .985**(60/L)
+β = .995**(60/L)
 
 #Endowments: HK and debt for types j∈{0,1,2}, calibrated for relative incomes
 #https://educationdata.org/student-loan-debt-by-income-level
@@ -37,10 +37,10 @@ isEducated = torch.concat(
     [torch.zeros(1,L,1),torch.ones(1,L,J-1)],
     -1).to(device)
 
-isNotOldest = torch.where(
+isNotYoungest = torch.where(
     torch.tensor([i%L for i in range(J*L)]).float()==0,False,True
 )
-isNotYoungest = torch.where(
+isNotOldest = torch.where(
     torch.tensor([i%L for i in range(J*L)]).float()==L-1,False,True
 )
 
@@ -153,8 +153,8 @@ taxRev = torch.sum(debtEndow[:,0,:]) - torch.sum(debtPay)
 #-------------------------------------------------------------------------------
 #time path 
 
-T = 12500 #number of periods to simulate
-burn = 5000 #burn period: throw this away
+T = 15000 #number of periods to simulate
+burn = 2500 #burn period: throw this away
 train = T - burn #the number of periods to train on 
 time = slice(burn,T,1) #training period slice
 
