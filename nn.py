@@ -49,7 +49,7 @@ class MODEL(nn.Module):
         dp=0.175 #dropout parameter
         self.model = nn.Sequential(
             nn.Linear(in_features=sizes[0],out_features=sizes[1]),
-            nn.ReLU(),nn.Dropout(p=dp),
+            nn.ReLU(),nn.Dropout(p=0.),
             nn.Linear(in_features=sizes[1],out_features=sizes[2]),
             nn.ReLU(),nn.Dropout(p=dp),
             nn.Linear(in_features=sizes[2],out_features=sizes[3]),
@@ -96,8 +96,8 @@ class MODEL(nn.Module):
         Δ_ = x[...,divs] #state-contingent dividend
         Chat = y_ + (P+Δ_)*E_ + B_ \
             - P*padAssets(E,yLen=yLen,side=1) - Q*padAssets(B,yLen=yLen,side=1)\
-            - debtPay.flatten()*torch.ones(yLen,L*J).to(device) \
-            - τ.flatten()*torch.ones(yLen,L*J).to(device) \
+            - debtPay.permute(0,2,1).flatten()*torch.ones(yLen,L*J).to(device) \
+            - τ.permute(0,2,1).flatten()*torch.ones(yLen,L*J).to(device) \
             - ϕ(padAssets(B,yLen=yLen,side=1))
 
         #Penalty if Consumption is negative 
@@ -141,8 +141,8 @@ class MODEL(nn.Module):
             Cf = yf_ + (Pf+Δf_)*Ef_ + Bf_ \
                 - Pf*padAssetsF(Ef,yLen=yLen,side=1) \
                 - Qf*padAssetsF(Bf,yLen=yLen,side=1) \
-                - debtPay.flatten()*torch.ones(S,yLen,L*J).to(device) \
-                - τ.flatten()*torch.ones(S,yLen,L*J).to(device) \
+                - debtPay.permute(0,2,1).flatten()*torch.ones(S,yLen,L*J).to(device) \
+                - τ.permute(0,2,1).flatten()*torch.ones(S,yLen,L*J).to(device) \
                 - ϕ(padAssetsF(Bf,yLen=yLen,side=1))
 
         #Euler Errors: equity then bond: THIS IS JUST E[MR]-1=0
@@ -150,9 +150,6 @@ class MODEL(nn.Module):
             β*torch.tensordot(up(Cf[...,isNotYoungest])*(Pf+Δf_)
             ,torch.tensor(probs),dims=([0],[0]))/(up(C[...,isNotOldest])*P) - 1.
         )
-
-        torch.sum(torch.abs(β*torch.tensordot(up(Cf[...,isNotYoungest])*(Pf+Δf_)
-            ,torch.tensor(probs),dims=([0],[0]))/(up(C[...,isNotOldest])) - P),-1)
 
         bondEuler = torch.abs(
             β*torch.tensordot(up(Cf[...,isNotYoungest])
@@ -173,7 +170,7 @@ class MODEL(nn.Module):
         if full_loss:
             return loss_vec
         else:
-            p=2
+            p=1.
             return torch.sum(loss_vec**p,-1)**(1/p)
         #return torch.log(torch.sum(loss_vec,-1)+1)
 
@@ -202,15 +199,17 @@ class CustDataSet(Dataset):
             X = torch.zeros(T,input).to(device)
             Y = torch.zeros(T,output).to(device)
             X[0] = torch.concat(
-                [ebar.flatten(),bbar.flatten(),
-                yhist[0].flatten(),Yhist[0,0],δhist[0,0]],
-                0)
+                [ebar.permute(0,2,1).flatten(),bbar.permute(0,2,1).flatten(),
+                yhist.permute(0,2,1)[0].flatten(),Yhist[0,0],δhist[0,0]],
+                0
+            )
             Y[0] = model(X[0])
             for t in range(1,T):
                 X[t] = torch.concat(
                     [Y[t-1,equity],Y[t-1,bond],
-                    yhist[t].flatten(),Yhist[t,0],δhist[t,0]],
-                    0)
+                    yhist.permute(0,2,1)[t].flatten(),Yhist[t,0],δhist[t,0]],
+                    0
+                )
                 Y[t] = model(X[t])
         
         #training inputs
@@ -223,7 +222,7 @@ class CustDataSet(Dataset):
                     [ebar.flatten(),bbar.flatten(),
                     pbar.flatten(),qbar.flatten()],
                     0
-                ).detach().clone()
+                ).clone()
         else:
             self.Y = torch.zeros(train).float().to(device).detach().clone()
 
@@ -236,4 +235,3 @@ class CustDataSet(Dataset):
     #return index batches
     def __getitem__(self,idx):
         return self.X[idx], self.Y[idx]
-

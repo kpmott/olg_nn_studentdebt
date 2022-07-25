@@ -111,7 +111,7 @@ debtEndow = y[:,0,:]*torch.tensor([0,.44,.59]).reshape((1,1,J)).to(device)
 #-------------------------------------------------------------------------------
 #borrowing cost function
 #borrowing cost parameter
-λ = -0.025
+λ = 0.#-0.025
 
 def ϕ(b):
     return torch.where(torch.greater_equal(b,0.),torch.zeros(b.shape),λ*b)
@@ -146,7 +146,7 @@ debtPay = debtEndow*amortPay*isWorker
 taxRev = torch.sum(debtEndow[:,0,:]) - torch.sum(debtPay)
 
 #tax/transfer 
-τ = y*isWorker
+τ = y[0,0,:]*torch.ones(1,L,J)
 τ /= torch.sum(τ)
 τ *= taxRev
 

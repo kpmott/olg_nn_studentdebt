@@ -10,44 +10,44 @@ savePath = './.trained_model_params.pt'
 model.eval()
 model.load_state_dict(torch.load(savePath))
 
+#-------------------------------------------------------------------------------
+#Data
 data = CustDataSet()
 x = data.X
-model.losscalc(x,full_loss=True)
-
-#Data
 model.eval()        
+
 #Given x, calculate predictions 
-y_pred = model(x)
-yLen = y_pred.shape[0]
-
-#-----------------------------------------------------------------------
-#Allocations/prices from predictions: TODAY
-E = y_pred[...,equity] #equity
-B = y_pred[...,bond] #bonds
-P = y_pred[...,eqprice] #price of equity
-Q = y_pred[...,bondprice] #price of bonds
-
-#BC accounting: Consumption
-E_ = padAssets(x[...,equity],yLen=yLen,side=0) #equity lag
-B_ = padAssets(x[...,bond],yLen=yLen,side=0) #bond lag
-y_ = x[...,incomes] #state-contingent endowment
-Δ_ = x[...,divs] #state-contingent dividend
-Chat = y_ + (P+Δ_)*E_ + B_ \
-    - P*padAssets(E,yLen=yLen,side=1) - Q*padAssets(B,yLen=yLen,side=1)\
-    - debtPay.flatten()*torch.ones(yLen,L*J).to(device) \
-    - τ.flatten()*torch.ones(yLen,L*J).to(device) \
-    - ϕ(padAssets(B,yLen=yLen,side=1))
-
-#Penalty if Consumption is negative 
-ϵc = 1e-8
-C = torch.maximum(Chat,ϵc*(Chat*0+1))
-cpen = -torch.sum(torch.less(Chat,0)*Chat/ϵc,-1)[:,None]
-
-#-----------------------------------------------------------------------
-#1-PERIOD FORECAST: for Euler expectations
-#state variable construction 
-
 with torch.no_grad():
+    y_pred = model(x)
+    yLen = y_pred.shape[0]
+
+    #---------------------------------------------------------------------------
+    #Allocations/prices from predictions: TODAY
+    E = y_pred[...,equity] #equity
+    B = y_pred[...,bond] #bonds
+    P = y_pred[...,eqprice] #price of equity
+    Q = y_pred[...,bondprice] #price of bonds
+
+    #BC accounting: Consumption
+    E_ = padAssets(x[...,equity],yLen=yLen,side=0) #equity lag
+    B_ = padAssets(x[...,bond],yLen=yLen,side=0) #bond lag
+    y_ = x[...,incomes] #state-contingent endowment
+    Δ_ = x[...,divs] #state-contingent dividend
+    Chat = y_ + (P+Δ_)*E_ + B_ \
+        - P*padAssets(E,yLen=yLen,side=1) - Q*padAssets(B,yLen=yLen,side=1)\
+        - debtPay.flatten()*torch.ones(yLen,L*J).to(device) \
+        - τ.flatten()*torch.ones(yLen,L*J).to(device) \
+        - ϕ(padAssets(B,yLen=yLen,side=1))
+
+    #Penalty if Consumption is negative 
+    ϵc = 1e-8
+    C = torch.maximum(Chat,ϵc*(Chat*0+1))
+    cpen = -torch.sum(torch.less(Chat,0)*Chat/ϵc,-1)[:,None]
+
+    #---------------------------------------------------------------------------
+    #1-PERIOD FORECAST: for Euler expectations
+    #state variable construction 
+
     #lagged asset holdings tomorrow are endog. asset holdings today 
     endog = torch.concat([E,B],-1)[None].repeat(S,1,1) 
     #state contingent vars
@@ -83,34 +83,48 @@ with torch.no_grad():
         - τ.flatten()*torch.ones(S,yLen,L*J).to(device) \
         - ϕ(padAssetsF(Bf,yLen=yLen,side=1))
 
-#Euler Errors: equity then bond: THIS IS JUST E[MR]-1=0
-eqEuler = torch.abs(
-    β*torch.tensordot(up(Cf[...,isNotYoungest])*(Pf+Δf_)
-    ,torch.tensor(probs),dims=([0],[0]))/(up(C[...,isNotOldest])*P) - 1.
-)
+    #Euler Errors: equity then bond: THIS IS JUST E[MR]-1=0
+    eqEuler = torch.abs(
+        β*torch.tensordot(up(Cf[...,isNotYoungest])*(Pf+Δf_)
+        ,torch.tensor(probs),dims=([0],[0]))/(up(C[...,isNotOldest])*P) - 1.
+    )
 
-bondEuler = torch.abs(
-    β*torch.tensordot(up(Cf[...,isNotYoungest])
-    ,torch.tensor(probs),dims=([0],[0]))/(up(C[...,isNotOldest])*Q) - 1.
-)
+    bondEuler = torch.abs(
+        β*torch.tensordot(up(Cf[...,isNotYoungest])
+        ,torch.tensor(probs),dims=([0],[0]))/(up(C[...,isNotOldest])*Q) - 1.
+    )
 
-#Market Clearing Errors
-equityMCC = torch.abs(1-torch.sum(E,-1))[:,None]
-bondMCC =   torch.abs(torch.sum(B,-1))[:,None]
+    #Market Clearing Errors
+    equityMCC = torch.abs(1-torch.sum(E,-1))[:,None]
+    bondMCC =   torch.abs(torch.sum(B,-1))[:,None]
 
-#so in each period, the error is the sum of above
-#EULERS + MCCs + consumption penalty 
-loss_vec = torch.concat([eqEuler,bondEuler,equityMCC,bondMCC,cpen],-1)
+    #so in each period, the error is the sum of above
+    #EULERS + MCCs + consumption penalty 
+    loss_vec = torch.concat([eqEuler,bondEuler,equityMCC,bondMCC,cpen],-1)
 
+    p=2
+    lossval = torch.sum(loss_vec**p,-1)**(1/p)
+
+#---------------------------------------------------------------------------
+#Plots
 #Plot globals
 linestyle = ['-','--',':']
 linecolor = ['k','b','r']
 plottime = slice(-150,train,1)
 
+#FIX LIFE-CYCLE PLOTS TO GRAB FROM SAME AGENT'S ACTUAL LIFE
 #Consumption plot
-cplot = C.reshape(train,L,J)[plottime]
+Clife = torch.zeros(train-L,L,J)
+Cj = C.reshape(train,J,L).permute(0,2,1)
 for j in range(J):
-    plt.plot(cplot[:,:,j].detach().cpu().t(),linestyle[j]+linecolor[j])
+    for t in range(train-L):
+        for i in range(L):
+            Clife[t,i,j] = Cj[t+i,i,j]
+
+for j in range(J):
+    plt.plot(
+        Clife[plottime,:,j].detach().cpu().t(),linestyle[j]+linecolor[j]
+    )
 plt.xticks([i for i in range(L)]);plt.xlabel("i")
 plt.title("Life-Cycle Consumption")
 plt.legend(handles=
@@ -121,9 +135,17 @@ plt.legend(handles=
 plt.savefig('.c.png');plt.clf()
 
 #Bond plot
-bplot = B.reshape(train,L-1,J)[plottime]
+Blife = torch.zeros(train-L,L-1,J)
+Bj = B.reshape(train,J,L-1).permute(0,2,1)
 for j in range(J):
-    plt.plot(bplot[:,:,j].detach().cpu().t(),linestyle[j]+linecolor[j])
+    for t in range(train-L):
+        for i in range(L-1):
+            Blife[t,i,j] = Bj[t+i,i,j]
+
+for j in range(J):
+    plt.plot(
+        Blife[plottime,:,j].detach().cpu().t(),linestyle[j]+linecolor[j]
+    )
 plt.xticks([i for i in range(L-1)]);plt.xlabel("i")
 plt.title("Life-Cycle Bonds")
 plt.legend(handles=
@@ -134,9 +156,17 @@ plt.legend(handles=
 plt.savefig('.b.png');plt.clf()
 
 #Equity plot
-eplot = E.reshape(train,L-1,J)[plottime]
+Elife = torch.zeros(train-L,L-1,J)
+Ej = E.reshape(train,J,L-1).permute(0,2,1)
 for j in range(J):
-    plt.plot(eplot[:,:,j].detach().cpu().t(),linestyle[j]+linecolor[j])
+    for t in range(train-L):
+        for i in range(L-1):
+            Elife[t,i,j] = Ej[t+i,i,j]
+
+for j in range(J):
+    plt.plot(
+        Elife[plottime,:,j].detach().cpu().t(),linestyle[j]+linecolor[j]
+    )
 plt.xticks([i for i in range(L-1)]);plt.xlabel("i")
 plt.title("Life-Cycle Equity")
 plt.legend(handles=
@@ -146,14 +176,14 @@ plt.legend(handles=
 )
 plt.savefig('.e.png');plt.clf()
 
-#Prices plot
+#Equity price plot
 pplot = P[plottime]
 plt.plot(pplot.detach().cpu(),'k-')
 plt.title('Equity Price')
 plt.xticks([])
 plt.savefig('.p.png');plt.clf()
 
-#Bond plot
+#Bond price plot
 qplot = Q[plottime]
 plt.plot(qplot.detach().cpu(),'k-')
 plt.title('Bond Price')
@@ -170,3 +200,30 @@ plt.plot(exRetplot.detach().cpu(),'k-')
 plt.title('Excess Return')
 plt.xticks([])
 plt.savefig('.exret.png');plt.clf()
+
+#---------------------------------------------------------------------------
+#Individual returns
+rets = annualize(
+    ((P[1:train-L,None]+Δ[1:train-L,None])*Elife[:-1] + Blife[:-1]) \
+        / (P[:train-L-1,None]*Elife[:-1] + Q[:train-L-1,None]*Blife[:-1]) 
+)
+for j in range(J):  
+    plt.plot(
+        rets[plottime,:,j].detach().cpu().t(),linestyle[j]+linecolor[j]
+    )
+plt.xticks([i for i in range(L-1)]);plt.xlabel("i")
+plt.title("Life-Cycle Expected Portfolio Returns")
+plt.legend(handles=
+    [matplotlib.lines.Line2D([],[],
+    linestyle=linestyle[j], color=linecolor[j], label=str(j)) 
+    for j in range(J)]
+)
+plt.savefig('.rets.png');plt.clf()
+
+#---------------------------------------------------------------------------
+#Expected utility
+EU = torch.mean(
+    torch.tensordot(
+        u(Clife),torch.tensor([β**i for i in range(L)]),dims=([1],[0])
+    ),0
+)
