@@ -113,7 +113,7 @@ debtEndow = (y[:,:,0]*torch.tensor([0,.44,.59]).to(device))[:,:,None]
 #-------------------------------------------------------------------------------
 #borrowing cost function
 #borrowing cost parameter
-λ = -0.5
+λ = -0.25
 
 def ϕ(b):
     return torch.where(torch.greater_equal(b,0.),torch.zeros(b.shape),λ*b)

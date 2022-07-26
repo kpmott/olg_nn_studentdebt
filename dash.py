@@ -29,21 +29,21 @@ if savePretrain:
 if loadPretrain:
     model.load_state_dict(torch.load(savePrePath))
 
-losses = train_loop(epochs=250,batchsize=32,lr=1e-5)
+losses = train_loop(epochs=500,batchsize=32,lr=1e-5)
 if saveTrain:
     model.eval()
     torch.save(model.state_dict(), savePath)
     model.train()
 os.system('./data_sim.py')
 
-losses = train_loop(epochs=250,batchsize=64,lr=1e-6,losses=losses)
+losses = train_loop(epochs=500,batchsize=64,lr=1e-6,losses=losses)
 if saveTrain:
     model.eval()
     torch.save(model.state_dict(), savePath)
     model.train()
 os.system('./data_sim.py')
 
-losses = train_loop(epochs=250,batchsize=100,lr=1e-7,losses=losses)
+losses = train_loop(epochs=500,batchsize=100,lr=1e-7,losses=losses)
 if saveTrain:
     model.eval()
     torch.save(model.state_dict(), savePath)
