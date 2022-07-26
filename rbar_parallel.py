@@ -230,9 +230,13 @@ def padAssetsF(ASSETS,yLen,side=0):
     return torch.flatten(ASSETSJpad,start_dim=-2).to(device)
 
 #-------------------------------------------------------------------------------
-savePrePath = './.pretrained_model_params.pt'
-savePath = './.trained_model_params.pt'
-plotPath = './plots/'
+savePrePath = './pretrain/'+str(g)+'/.pretrained_model_params.pt'
+savePath    = './train/'+str(g)+'/.trained_model_params.pt'
+plotPath = './plots/'+str(g)+'/'
+if not os.path.exists(savePrePath):
+    os.makedirs(savePrePath)
+if not os.path.exists(savePath):
+    os.makedirs(savePath)
 if not os.path.exists(plotPath):
     os.makedirs(plotPath)
 
