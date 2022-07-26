@@ -113,8 +113,8 @@ linecolor = ['k','b','r']
 plottime = slice(-150,train,1)
 figsize = (10,4)
 
-#FIX LIFE-CYCLE PLOTS TO GRAB FROM SAME AGENT'S ACTUAL LIFE
-#Consumption plot
+#---------------------------------------------------------------------------
+#Consumption lifecycle plot
 Clife = torch.zeros(train-L,L,J)
 Cj = C.reshape(train,J,L).permute(0,2,1)
 for j in range(J):
@@ -135,6 +135,23 @@ plt.legend(handles=
     for j in range(J)]
 )
 plt.savefig('.c.png');plt.clf()
+plt.close()
+
+#Consumption plot
+Cj = C.reshape(train,J,L)
+plt.figure(figsize=figsize)
+for j in range(J):
+    plt.plot(
+        Cj[plottime,j,:].detach().cpu(),linestyle[j]+linecolor[j]
+    )
+plt.xticks([]);plt.xlabel("t")
+plt.title("Consumption")
+plt.legend(handles=
+    [matplotlib.lines.Line2D([],[],
+    linestyle=linestyle[j], color=linecolor[j], label=str(j)) 
+    for j in range(J)]
+)
+plt.savefig('.consProcess.png');plt.clf()
 plt.close()
 
 #Bond plot
@@ -231,6 +248,25 @@ plt.legend(handles=
     for j in range(J)]
 )
 plt.savefig('.rets.png');plt.clf()
+plt.close()
+
+#---------------------------------------------------------------------------
+#Portfolio shares
+eqshare = P[:train-L-1,None]*Elife[:-1] \
+    / (P[:train-L-1,None]*Elife[:-1] + Q[:train-L-1,None]*Blife[:-1]) 
+plt.figure(figsize=figsize)
+for j in range(J):  
+    plt.plot(
+        eqshare[plottime,:,j].detach().cpu().t(),linestyle[j]+linecolor[j]
+    )
+plt.xticks([i for i in range(L-1)]);plt.xlabel("i")
+plt.title("Life-Cycle Portfolio Share: Equity Asset")
+plt.legend(handles=
+    [matplotlib.lines.Line2D([],[],
+    linestyle=linestyle[j], color=linecolor[j], label=str(j)) 
+    for j in range(J)]
+)
+plt.savefig('.port.png');plt.clf()
 plt.close()
 
 #---------------------------------------------------------------------------
