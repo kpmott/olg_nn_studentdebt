@@ -5,8 +5,6 @@ from packages import *
 from params import *
 from nn import *
 
-savePrePath = './.pretrained_model_params.pt'
-savePath = './.trained_model_params.pt'
 model.eval()
 model.load_state_dict(torch.load(savePath))
 
@@ -134,7 +132,7 @@ plt.legend(handles=
     linestyle=linestyle[j], color=linecolor[j], label=str(j)) 
     for j in range(J)]
 )
-plt.savefig('.c.png');plt.clf()
+plt.savefig(plotPath+'.c.png');plt.clf()
 plt.close()
 
 #Consumption plot
@@ -151,7 +149,7 @@ plt.legend(handles=
     linestyle=linestyle[j], color=linecolor[j], label=str(j)) 
     for j in range(J)]
 )
-plt.savefig('.consProcess.png');plt.clf()
+plt.savefig(plotPath+'.consProcess.png');plt.clf()
 plt.close()
 
 #Bond plot
@@ -173,7 +171,7 @@ plt.legend(handles=
     linestyle=linestyle[j], color=linecolor[j], label=str(j)) 
     for j in range(J)]
 )
-plt.savefig('.b.png');plt.clf()
+plt.savefig(plotPath+'.b.png');plt.clf()
 plt.close()
 
 #Equity plot
@@ -195,7 +193,7 @@ plt.legend(handles=
     linestyle=linestyle[j], color=linecolor[j], label=str(j)) 
     for j in range(J)]
 )
-plt.savefig('.e.png');plt.clf()
+plt.savefig(plotPath+'.e.png');plt.clf()
 plt.close()
 
 #Equity price plot
@@ -204,7 +202,7 @@ plt.figure(figsize=figsize)
 plt.plot(pplot.detach().cpu(),'k-')
 plt.title('Equity Price')
 plt.xticks([])
-plt.savefig('.p.png');plt.clf()
+plt.savefig(plotPath+'.p.png');plt.clf()
 plt.close()
 
 #Bond price plot
@@ -213,7 +211,7 @@ plt.figure(figsize=figsize)
 plt.plot(qplot.detach().cpu(),'k-')
 plt.title('Bond Price')
 plt.xticks([])
-plt.savefig('.q.png');plt.clf()
+plt.savefig(plotPath+'.q.png');plt.clf()
 plt.close()
 
 #Excess return 
@@ -226,7 +224,7 @@ plt.figure(figsize=figsize)
 plt.plot(exRetplot.detach().cpu(),'k-')
 plt.title('Excess Return')
 plt.xticks([])
-plt.savefig('.exret.png');plt.clf()
+plt.savefig(plotPath+'.exret.png');plt.clf()
 plt.close()
 
 #---------------------------------------------------------------------------
@@ -247,7 +245,7 @@ plt.legend(handles=
     linestyle=linestyle[j], color=linecolor[j], label=str(j)) 
     for j in range(J)]
 )
-plt.savefig('.rets.png');plt.clf()
+plt.savefig(plotPath+'.rets.png');plt.clf()
 plt.close()
 
 #---------------------------------------------------------------------------
@@ -266,7 +264,7 @@ plt.legend(handles=
     linestyle=linestyle[j], color=linecolor[j], label=str(j)) 
     for j in range(J)]
 )
-plt.savefig('.port.png');plt.clf()
+plt.savefig(plotPath+'.port.png');plt.clf()
 plt.close()
 
 #---------------------------------------------------------------------------
@@ -280,4 +278,4 @@ plt.figure(figsize=figsize)
 plt.bar([j for j in range(J)],EU.cpu())
 plt.xticks([j for j in range(J)]);plt.xlabel('j')
 plt.title('Expected Utility')
-plt.savefig('.EU.png');plt.clf();plt.close()
+plt.savefig(plotPath+'.EU.png');plt.clf();plt.close()

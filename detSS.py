@@ -98,16 +98,16 @@ def Plots():
     plt.figure(figsize=figsize);plt.plot(cbar.squeeze().t().cpu());\
     plt.legend(lbls);plt.title('detSS Consumption');plt.xlabel("i");\
     plt.xticks([i for i in range(L)]);\
-    plt.savefig('.detSS_C.png');plt.clf()
+    plt.savefig(plotPath+'.detSS_C.png');plt.clf()
     
     plt.figure(figsize=figsize);plt.plot(ebar.squeeze().t().cpu());\
     plt.legend(lbls);plt.title('detSS Equity Ownership');plt.xlabel("i");\
     plt.xticks([i for i in range(L-1)]);\
-    plt.savefig('.detSS_E.png');plt.clf()
+    plt.savefig(plotPath+'.detSS_E.png');plt.clf()
 
-    os.system("cp .detSS_C.png /home/kpmott/Dropbox/Apps/Overleaf/Dissertation/1_ApplicationStudent/")
-    os.system("mv /home/kpmott/Dropbox/Apps/Overleaf/Dissertation/1_ApplicationStudent/.detSS_C.png /home/kpmott/Dropbox/Apps/Overleaf/Dissertation/1_ApplicationStudent/detSS_C.png")
-    os.system("cp .detSS_E.png /home/kpmott/Dropbox/Apps/Overleaf/Dissertation/1_ApplicationStudent/")
-    os.system("mv /home/kpmott/Dropbox/Apps/Overleaf/Dissertation/1_ApplicationStudent/.detSS_E.png /home/kpmott/Dropbox/Apps/Overleaf/Dissertation/1_ApplicationStudent/detSS_E.png")
+    #os.system("cp .detSS_C.png /home/kpmott/Dropbox/Apps/Overleaf/Dissertation/1_ApplicationStudent/")
+    #os.system("mv /home/kpmott/Dropbox/Apps/Overleaf/Dissertation/1_ApplicationStudent/.detSS_C.png /home/kpmott/Dropbox/Apps/Overleaf/Dissertation/1_ApplicationStudent/detSS_C.png")
+    #os.system("cp .detSS_E.png /home/kpmott/Dropbox/Apps/Overleaf/Dissertation/1_ApplicationStudent/")
+    #os.system("mv /home/kpmott/Dropbox/Apps/Overleaf/Dissertation/1_ApplicationStudent/.detSS_E.png /home/kpmott/Dropbox/Apps/Overleaf/Dissertation/1_ApplicationStudent/detSS_E.png")
 
 Plots()

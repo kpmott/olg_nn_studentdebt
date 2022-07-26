@@ -57,7 +57,7 @@ shocks = torch.tensor([1-ζ,1+ζ]).to(device)
 #utility function 
 
 #Risk-aversion coeff
-γ = 2.25
+γ = 3
 
 #utility
 def u(x):
@@ -113,7 +113,7 @@ debtEndow = (y[:,:,0]*torch.tensor([0,.44,.59]).to(device))[:,:,None]
 #-------------------------------------------------------------------------------
 #borrowing cost function
 #borrowing cost parameter
-λ = 0.#-0.025
+λ = -0.5
 
 def ϕ(b):
     return torch.where(torch.greater_equal(b,0.),torch.zeros(b.shape),λ*b)
@@ -231,3 +231,10 @@ def padAssetsF(ASSETS,yLen,side=0):
     else:
         ASSETSJpad = nn.functional.pad(ASSETSJ,(0,1))
     return torch.flatten(ASSETSJpad,start_dim=-2).to(device)
+
+#-------------------------------------------------------------------------------
+savePrePath = './.pretrained_model_params.pt'
+savePath = './.trained_model_params.pt'
+plotPath = './plots/'
+if not os.path.exists(plotPath):
+    os.makedirs(plotPath)

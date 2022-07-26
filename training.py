@@ -39,7 +39,7 @@ def pretrain_loop(epochs=100,batchsize=50,lr=1e-6,losses=[]):
             plt.figure(figsize=figsize)
             plt.plot(losses);plt.yscale('log');\
             plt.title("Pre-Train Losses: "+"{:.2e}".format(losses[-1]));\
-            plt.xlabel("Epoch");plt.savefig('.plot_prelosses.png');\
+            plt.xlabel("Epoch");plt.savefig(plotPath+'.plot_prelosses.png');\
             plt.clf()
             plt.close()
 
@@ -79,7 +79,7 @@ def train_loop(epochs=100,batchsize=32,lr=1e-8,losses=[]):
         plt.figure(figsize=figsize)
         plt.plot(losses);plt.yscale('log');\
         plt.title("Losses: "+"{:.2e}".format(losses[-1]));\
-        plt.xlabel("Epoch");plt.savefig('.plot_losses.png');\
+        plt.xlabel("Epoch");plt.savefig(plotPath+'.plot_losses.png');\
         plt.clf()
         plt.close()
 
