@@ -8,7 +8,7 @@ class TRAIN():
     def __init__(self,g,model,saveTrain=True):
         self.params = PARAMS(g)
         self.model = model#MODEL(g)
-        self.dataset = DATASET(g,self.model)
+        #self.dataset = DATASET(g,self.model)
         self.saveTrain = saveTrain
         self.g = g 
 
@@ -17,7 +17,7 @@ class TRAIN():
 
         for epoch in tqdm(range(epochs)):
             #generate pretraining data: labels are detSS
-            data = self.dataset
+            data = DATASET(self.g,self.model)
 
             #load training data into DataLoader object for batching (ON GPU)
             train_loader = DataLoader(
@@ -62,7 +62,7 @@ class TRAIN():
     def train(self):
         
         num_regimes = 3
-        epochs = [250,500,100]#[500 for epoch in range(num_regimes)]
+        epochs = [50,50,50]#[500 for epoch in range(num_regimes)]
         batches = [2**(1+5+batch) for batch in range(num_regimes)]
         lrs = [1e-5*10**(-n) for n in range(num_regimes)]
 
@@ -75,12 +75,12 @@ class TRAIN():
                     losses=losses
             )
 
-            if self.saveTrain:
-                self.model.eval()
-                torch.save(self.model.state_dict(), 
-                    self.params.savePath+'/.trained_model_params.pt'
-                )
-                self.model.train()
+        if self.saveTrain:
+            self.model.eval()
+            torch.save(self.model.state_dict(), 
+                self.params.savePath+'.trained_model_params.pt'
+            )
+            self.model.train()
 
     def solution_plots(self):
         params = self.params
