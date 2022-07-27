@@ -5,8 +5,8 @@ from detSS import DET_SS_ALLOCATIONS
 
 #This generates the training data
 class DATASET(Dataset):
-    def __init__(self,g):
-        model = MODEL(g)
+    def __init__(self,g,model):
+        #model = MODEL(g)
         params = PARAMS(g)
         ebar,bbar,_,_,_ = DET_SS_ALLOCATIONS(g).allocs()
 

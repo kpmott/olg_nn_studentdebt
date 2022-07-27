@@ -152,7 +152,7 @@ class PARAMS():
         self.bondprice = slice(-1,self.output,1)
 
         #-----------------------------------------------------------------------
-        self.savePath    = './train/'+str(g)+'/.trained_model_params.pt'
+        self.savePath    = './train/'+str(g)+'/'
         self.plotPath = './plots/'+str(g)+'/'
         if not os.path.exists(self.savePath):
             os.makedirs(self.savePath)

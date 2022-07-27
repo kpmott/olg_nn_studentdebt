@@ -27,20 +27,20 @@ params = PARAMS(g)
 train = TRAIN(g).train_loop
 model = MODEL(g)
 
-losses = train(epochs=1000,batchsize=32,lr=1e-5)
+losses = train(epochs=250,batchsize=64,lr=1e-5)
 if saveTrain:
     model.eval()
-    torch.save(model.state_dict(), params.savePath+'/.trained_model_params.pt')
+    torch.save(model.state_dict(), params.savePath+'.trained_model_params.pt')
     model.train()
 
-losses = train(epochs=1000,batchsize=64,lr=1e-6,losses=losses)
+losses = train(epochs=350,batchsize=128,lr=1e-6,losses=losses)
 if saveTrain:
     model.eval()
-    torch.save(model.state_dict(), params.savePath+'/.trained_model_params.pt')
+    torch.save(model.state_dict(), params.savePath+'.trained_model_params.pt')
     model.train()
 
-losses = train(epochs=1000,batchsize=100,lr=1e-7,losses=losses)
+losses = train(epochs=250,batchsize=256,lr=1e-7,losses=losses)
 if saveTrain:
     model.eval()
-    torch.save(model.state_dict(), params.savePath+'/.trained_model_params.pt')
+    torch.save(model.state_dict(), params.savePath+'.trained_model_params.pt')
     model.train()

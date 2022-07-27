@@ -8,15 +8,15 @@ from dataset import DATASET
 class TRAIN():
     def __init__(self,g):
         self.params = PARAMS(g)
-        self.dataset = DATASET(g)
         self.model = MODEL(g)
+        self.g = g
 
     def train_loop(self,epochs=100,batchsize=32,lr=1e-8,losses=[]):
         tol = 1e-3
 
         for epoch in tqdm(range(epochs)):
             #generate pretraining data: labels are detSS
-            data = self.dataset
+            data = DATASET(self.g,self.model)
 
             #load training data into DataLoader object for batching (ON GPU)
             train_loader = DataLoader(

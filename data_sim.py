@@ -5,12 +5,15 @@ from detSS import DET_SS_ALLOCATIONS
 from dataset import DATASET
 
 #-------------------------------------------------------------------------------
+model = MODEL(0)
+params=PARAMS(0)
+
 model.eval()
 model.load_state_dict(torch.load(params.savePath+'/.trained_model_params.pt'))
 
 #-------------------------------------------------------------------------------
 #Data
-data = 
+data = DATASET(0)
 x = data.X
 model.eval()        
 
