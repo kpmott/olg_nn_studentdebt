@@ -1,12 +1,11 @@
 from packages import *
 from parameters import PARAMS
-from nn import MODEL
+#from nn import MODEL
 from detSS import DET_SS_ALLOCATIONS
 
 #This generates the training data
 class DATASET(Dataset):
-    def __init__(self,g):
-        model = MODEL(g)
+    def __init__(self,g,model):
         params = PARAMS(g)
         ebar,bbar,_,_,_ = DET_SS_ALLOCATIONS(g).allocs()
 

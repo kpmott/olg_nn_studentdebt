@@ -176,7 +176,7 @@ class MODEL(nn.Module):
         loss_vec = torch.concat([eqEuler,bondEuler,equityMCC,bondMCC,cpen],-1)
 
         #set model back to training (dropout back on)
-        self.model.train()
+        #self.model.train()
 
         if full_loss:
             return loss_vec

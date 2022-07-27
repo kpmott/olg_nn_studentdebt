@@ -6,7 +6,7 @@ class PARAMS():
         devicelist = ["cuda:"+str(i) for i in range(8)]
 
         self.device = torch.device(
-            devicelist[g] if torch.cuda.is_available() else "cpu"
+            devicelist[g*0] if torch.cuda.is_available() else "cpu"
         )
         self.rbar = rbarlist[g]
         
@@ -152,7 +152,7 @@ class PARAMS():
         self.bondprice = slice(-1,self.output,1)
 
         #-----------------------------------------------------------------------
-        self.savePath    = './train/'+str(g)+'/.trained_model_params.pt'
+        self.savePath    = './train/'+str(g)
         self.plotPath = './plots/'+str(g)+'/'
         if not os.path.exists(self.savePath):
             os.makedirs(self.savePath)

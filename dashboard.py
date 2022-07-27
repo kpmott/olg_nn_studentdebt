@@ -1,10 +1,7 @@
 #!/home/kpmott/Git/olg_nn_studentdebt/pyt_olg/bin/python3
 #-------------------------------------------------------------------------------
-from packages import *
-from parameters import PARAMS
+from packages import argparse
 from nn import MODEL
-from detSS import DET_SS_ALLOCATIONS
-from dataset import DATASET
 from training import TRAIN
 
 parser = argparse.ArgumentParser(
@@ -20,9 +17,7 @@ g = config['gpu']
 
 #-------------------------------------------------------------------------------
 # TRAINING
-train = TRAIN(g,saveTrain=True)
+model = MODEL(g)
+train = TRAIN(g,model,saveTrain=True)
 train.train()
-
-from data_sim import DATA_SIM
-data_sim = DATA_SIM(g)
-data_sim.solution_plots()
+train.solution_plots()
