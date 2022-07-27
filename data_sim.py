@@ -4,278 +4,312 @@ from nn import MODEL
 from detSS import DET_SS_ALLOCATIONS
 from dataset import DATASET
 
-#-------------------------------------------------------------------------------
-model.eval()
-model.load_state_dict(torch.load(params.savePath+'/.trained_model_params.pt'))
-
-#-------------------------------------------------------------------------------
-#Data
-data = 
-x = data.X
-model.eval()        
-
-#Given x, calculate predictions 
-with torch.no_grad():
-    y_pred = model(x)
-    yLen = y_pred.shape[0]
-
-    #---------------------------------------------------------------------------
-    #Allocations/prices from predictions: TODAY
-    E = y_pred[...,equity] #equity
-    B = y_pred[...,bond] #bonds
-    P = y_pred[...,eqprice] #price of equity
-    Q = y_pred[...,bondprice] #price of bonds
-
-    #BC accounting: Consumption
-    E_ = padAssets(x[...,equity],yLen=yLen,side=0) #equity lag
-    B_ = padAssets(x[...,bond],yLen=yLen,side=0) #bond lag
-    y_ = x[...,incomes] #state-contingent endowment
-    Δ_ = x[...,divs] #state-contingent dividend
-    Chat = y_ + (P+Δ_)*E_ + B_ \
-        - P*padAssets(E,yLen=yLen,side=1) - Q*padAssets(B,yLen=yLen,side=1)\
-        - debtPay.flatten()*torch.ones(yLen,L*J).to(device) \
-        - τ.flatten()*torch.ones(yLen,L*J).to(device) \
-        - ϕ(padAssets(B,yLen=yLen,side=1))
-
-    #Penalty if Consumption is negative 
-    ϵc = 1e-8
-    C = torch.maximum(Chat,ϵc*(Chat*0+1))
-    cpen = -torch.sum(torch.less(Chat,0)*Chat/ϵc,-1)[:,None]
-
-    #---------------------------------------------------------------------------
-    #1-PERIOD FORECAST: for Euler expectations
-    #state variable construction 
-
-    #lagged asset holdings tomorrow are endog. asset holdings today 
-    endog = torch.concat([E,B],-1)[None].repeat(S,1,1) 
-    #state contingent vars
-    exog = torch.outer(shocks,
-        torch.concat([y.flatten(),F.reshape(1),δ.reshape(1)],0))\
-        [:,None,:].repeat(1,yLen,1) 
-    #full state variable tomorrow 
-    Xf = torch.concat([endog,exog],-1).float().detach()
-    #predictions for forecast values 
-    Yf = model(Xf)
-
-    #Allocations/prices from forecast predictions: 
-    #TOMORROW (f := forecast)
-    Ef = Yf[...,equity] #equity forecast
-    Bf = Yf[...,bond] #bond forecast
-    Pf = Yf[...,eqprice] #equity price forecast
-    Qf = Yf[...,bondprice] #bond price forecast
+class DATA_SIM():
+    def __init__(self,g):
+        self.g = g
     
-    #BC accounting: consumption 
-    #equity forecast lags
-    Ef_ = padAssets(E,yLen=yLen,side=0)[None].repeat(S,1,1) 
-    #bond forecase lags
-    Bf_ = padAssets(B,yLen=yLen,side=0)[None].repeat(S,1,1) 
-    #endowment realization
-    yf_ = Xf[...,incomes] 
-    #dividend realization
-    Δf_ = Xf[...,divs] 
-    #cons forecast
-    Cf = yf_ + (Pf+Δf_)*Ef_ + Bf_ \
-        - Pf*padAssetsF(Ef,yLen=yLen,side=1) \
-        - Qf*padAssetsF(Bf,yLen=yLen,side=1) \
-        - debtPay.flatten()*torch.ones(S,yLen,L*J).to(device) \
-        - τ.flatten()*torch.ones(S,yLen,L*J).to(device) \
-        - ϕ(padAssetsF(Bf,yLen=yLen,side=1))
+    def solution_plots(self):
+        params = PARAMS(self.g)
+        model = MODEL(self.g)
+        data = DATASET(self.g)
 
-    #Euler Errors: equity then bond: THIS IS JUST E[MR]-1=0
-    eqEuler = torch.abs(
-        β*torch.tensordot(up(Cf[...,isNotYoungest])*(Pf+Δf_)
-        ,torch.tensor(probs),dims=([0],[0]))/(up(C[...,isNotOldest])*P) - 1.
-    )
+        model.eval()
+        model.load_state_dict(torch.load(params.savePath+'/.trained_model_params.pt'))
 
-    bondEuler = torch.abs(
-        β*torch.tensordot(up(Cf[...,isNotYoungest])
-        ,torch.tensor(probs),dims=([0],[0]))/(up(C[...,isNotOldest])*Q) - 1.
-    )
+        #-------------------------------------------------------------------------------
+        #Data
+        x = data.X
+        model.eval()        
 
-    #Market Clearing Errors
-    equityMCC = torch.abs(1-torch.sum(E,-1))[:,None]
-    bondMCC =   torch.abs(torch.sum(B,-1))[:,None]
+        #Given x, calculate predictions 
+        with torch.no_grad():
+            y_pred = model(x)
+            yLen = y_pred.shape[0]
 
-    #so in each period, the error is the sum of above
-    #EULERS + MCCs + consumption penalty 
-    loss_vec = torch.concat([eqEuler,bondEuler,equityMCC,bondMCC,cpen],-1)
+            #-----------------------------------------------------------------------
+            #Allocations/prices from predictions: TODAY
+            E = y_pred[...,params.equity] #equity
+            B = y_pred[...,params.bond] #bonds
+            P = y_pred[...,params.eqprice] #price of equity
+            Q = y_pred[...,params.bondprice] #price of bonds
 
-    p=2
-    lossval = torch.sum(loss_vec**p,-1)**(1/p)
+            #BC accounting: Consumption
+            #equity lag
+            E_ = params.padAssets(x[...,params.equity],yLen=yLen,side=0) 
+            #bond lag
+            B_ = params.padAssets(x[...,params.bond],yLen=yLen,side=0) 
+            #state-contingent endowment
+            y_ = x[...,params.incomes] 
+            #state-contingent dividend
+            Δ_ = x[...,params.divs] 
+            #cons from BC
+            Chat = y_ + (P+Δ_)*E_ + B_ \
+                - P*params.padAssets(E,yLen=yLen,side=1) \
+                - Q*params.padAssets(B,yLen=yLen,side=1) \
+                - params.debtPay.flatten()*\
+                    torch.ones(yLen,params.L*params.J)\
+                        .to(params.device) \
+                - params.τ.flatten()\
+                    *torch.ones(yLen,params.L*params.J)\
+                        .to(params.device) \
+                - params.ϕ(params.padAssets(B,yLen=yLen,side=1))
 
-#---------------------------------------------------------------------------
-#Plots
-#Plot globals
-linestyle = ['-','--',':']
-linecolor = ['k','b','r']
-plottime = slice(-150,train,1)
-figsize = (10,4)
+            #Penalty if Consumption is negative 
+            ϵc = 1e-8
+            C = torch.maximum(Chat,ϵc*(Chat*0+1))
+            cpen = -torch.sum(torch.less(Chat,0)*Chat/ϵc,-1)[:,None]
 
-#---------------------------------------------------------------------------
-#Consumption lifecycle plot
-Clife = torch.zeros(train-L,L,J)
-Cj = C.reshape(train,J,L).permute(0,2,1)
-for j in range(J):
-    for t in range(train-L):
-        for i in range(L):
-            Clife[t,i,j] = Cj[t+i,i,j]
+            #-----------------------------------------------------------------------
+            #1-PERIOD FORECAST: for Euler expectations
+            #state variable construction 
+            
+            with torch.no_grad():
+                #lagged asset holdings tomorrow are endog. asset holdings today 
+                endog = torch.concat([E,B],-1)[None].repeat(params.S,1,1) 
+                #state contingent vars
+                exog = torch.outer(params.shocks,
+                    torch.concat(
+                        [params.y.flatten(),params.F.reshape(1),
+                        params.δ.reshape(1)],0)
+                    )[:,None,:].repeat(1,yLen,1) 
+                #full state variable tomorrow 
+                Xf = torch.concat([endog,exog],-1).float().detach()
+                #predictions for forecast values 
+                Yf = model(Xf)
 
-plt.figure(figsize=figsize)
-for j in range(J):
-    plt.plot(
-        Clife[plottime,:,j].detach().cpu().t(),linestyle[j]+linecolor[j]
-    )
-plt.xticks([i for i in range(L)]);plt.xlabel("i")
-plt.title("Life-Cycle Consumption")
-plt.legend(handles=
-    [matplotlib.lines.Line2D([],[],
-    linestyle=linestyle[j], color=linecolor[j], label=str(j)) 
-    for j in range(J)]
-)
-plt.savefig(plotPath+'.c.png');plt.clf()
-plt.close()
+                #Allocations/prices from forecast predictions: 
+                #TOMORROW (f := forecast)
+                Ef = Yf[...,params.equity] #equity forecast
+                Bf = Yf[...,params.bond] #bond forecast
+                Pf = Yf[...,params.eqprice] #equity price forecast
+                Qf = Yf[...,params.bondprice] #bond price forecast
+                
+                #BC accounting: consumption 
+                #equity forecast lags
+                Ef_ = params.padAssets(E,yLen=yLen,side=0)[None]\
+                    .repeat(params.S,1,1) 
+                #bond forecase lags
+                Bf_ = params.padAssets(B,yLen=yLen,side=0)[None]\
+                    .repeat(params.S,1,1) 
+                #endowment realization
+                yf_ = Xf[...,params.incomes] 
+                #dividend realization
+                Δf_ = Xf[...,params.divs] 
+                #cons forecast
+                Cf = yf_ + (Pf+Δf_)*Ef_ + Bf_ \
+                    - Pf*params.padAssetsF(Ef,yLen=yLen,side=1) \
+                    - Qf*params.padAssetsF(Bf,yLen=yLen,side=1) \
+                    - params.debtPay.flatten()*\
+                        torch.ones(params.S,yLen,params.L*params.J)\
+                            .to(params.device) \
+                    - params.τ.flatten()*\
+                        torch.ones(params.S,yLen,params.L*params.J)\
+                            .to(params.device) \
+                    - params.ϕ(params.padAssetsF(Bf,yLen=yLen,side=1))
 
-#Consumption plot
-Cj = C.reshape(train,J,L)
-plt.figure(figsize=figsize)
-for j in range(J):
-    plt.plot(
-        Cj[plottime,j,:].detach().cpu(),linestyle[j]+linecolor[j]
-    )
-plt.xticks([]);plt.xlabel("t")
-plt.title("Consumption")
-plt.legend(handles=
-    [matplotlib.lines.Line2D([],[],
-    linestyle=linestyle[j], color=linecolor[j], label=str(j)) 
-    for j in range(J)]
-)
-plt.savefig(plotPath+'.consProcess.png');plt.clf()
-plt.close()
+            #Euler Errors: equity then bond: THIS IS JUST E[MR]-1=0
+            eqEuler = torch.mean(torch.abs(
+                params.β*torch.tensordot(
+                    params.up(Cf[...,params.isNotYoungest])*(Pf+Δf_),
+                    torch.tensor(params.probs),dims=([0],[0])
+                )\
+                /(params.up(C[...,params.isNotOldest])*P) - 1.
+                ),-1
+            )[:,None]
 
-#Bond plot
-Blife = torch.zeros(train-L,L-1,J)
-Bj = B.reshape(train,J,L-1).permute(0,2,1)
-for j in range(J):
-    for t in range(train-L):
-        for i in range(L-1):
-            Blife[t,i,j] = Bj[t+i,i,j]
-plt.figure(figsize=figsize)
-for j in range(J):
-    plt.plot(
-        Blife[plottime,:,j].detach().cpu().t(),linestyle[j]+linecolor[j]
-    )
-plt.xticks([i for i in range(L-1)]);plt.xlabel("i")
-plt.title("Life-Cycle Bonds")
-plt.legend(handles=
-    [matplotlib.lines.Line2D([],[],
-    linestyle=linestyle[j], color=linecolor[j], label=str(j)) 
-    for j in range(J)]
-)
-plt.savefig(plotPath+'.b.png');plt.clf()
-plt.close()
+            bondEuler = torch.mean(torch.abs(
+                params.β*torch.tensordot(
+                    params.up(Cf[...,params.isNotYoungest]),
+                    torch.tensor(params.probs),dims=([0],[0])
+                )\
+                /(params.up(C[...,params.isNotOldest])*Q) - 1.
+                ),-1
+            )[:,None]
 
-#Equity plot
-Elife = torch.zeros(train-L,L-1,J)
-Ej = E.reshape(train,J,L-1).permute(0,2,1)
-for j in range(J):
-    for t in range(train-L):
-        for i in range(L-1):
-            Elife[t,i,j] = Ej[t+i,i,j]
-plt.figure(figsize=figsize)
-for j in range(J):
-    plt.plot(
-        Elife[plottime,:,j].detach().cpu().t(),linestyle[j]+linecolor[j]
-    )
-plt.xticks([i for i in range(L-1)]);plt.xlabel("i")
-plt.title("Life-Cycle Equity")
-plt.legend(handles=
-    [matplotlib.lines.Line2D([],[],
-    linestyle=linestyle[j], color=linecolor[j], label=str(j)) 
-    for j in range(J)]
-)
-plt.savefig(plotPath+'.e.png');plt.clf()
-plt.close()
+            #Market Clearing Errors
+            equityMCC = torch.abs(1-torch.sum(E,-1))[:,None]
+            bondMCC   = torch.abs(torch.sum(B,-1))[:,None]
 
-#Equity price plot
-pplot = P[plottime]
-plt.figure(figsize=figsize)
-plt.plot(pplot.detach().cpu(),'k-')
-plt.title('Equity Price')
-plt.xticks([])
-plt.savefig(plotPath+'.p.png');plt.clf()
-plt.close()
+            #so in each period, the error is the sum of above
+            #EULERS + MCCs + consumption penalty 
+            loss_vec = torch.concat([eqEuler,bondEuler,equityMCC,bondMCC,cpen],-1)
 
-#Bond price plot
-qplot = Q[plottime]
-plt.figure(figsize=figsize)
-plt.plot(qplot.detach().cpu(),'k-')
-plt.title('Bond Price')
-plt.xticks([])
-plt.savefig(plotPath+'.q.png');plt.clf()
-plt.close()
+        #---------------------------------------------------------------------------
+        #Plots
+        #Plot globals
+        linestyle = ['-','--',':']
+        linecolor = ['k','b','r']
+        plottime = slice(-150,params.train,1)
+        figsize = (10,4)
 
-#Excess return 
-Δ = x[...,divs]
-eqRet = annualize((P[1:] + Δ[1:])/P[:-1])
-bondRet = annualize(1/Q[:-1])
-exRet = eqRet-bondRet
-exRetplot = exRet[plottime]
-plt.figure(figsize=figsize)
-plt.plot(exRetplot.detach().cpu(),'k-')
-plt.title('Excess Return')
-plt.xticks([])
-plt.savefig(plotPath+'.exret.png');plt.clf()
-plt.close()
+        #---------------------------------------------------------------------------
+        #Consumption lifecycle plot
+        Clife = torch.zeros(params.train-params.L,params.L,params.J)
+        Cj = C.reshape(params.train,params.J,params.L).permute(0,2,1)
+        for j in range(params.J):
+            for t in range(params.train-params.L):
+                for i in range(params.L):
+                    Clife[t,i,j] = Cj[t+i,i,j]
 
-#---------------------------------------------------------------------------
-#Individual returns
-rets = annualize(
-    ((P[1:train-L,None]+Δ[1:train-L,None])*Elife[:-1] + Blife[:-1]) \
-        / (P[:train-L-1,None]*Elife[:-1] + Q[:train-L-1,None]*Blife[:-1]) 
-)
-plt.figure(figsize=figsize)
-for j in range(J):  
-    plt.plot(
-        rets[plottime,:,j].detach().cpu().t(),linestyle[j]+linecolor[j]
-    )
-plt.xticks([i for i in range(L-1)]);plt.xlabel("i")
-plt.title("Life-Cycle Expected Portfolio Returns")
-plt.legend(handles=
-    [matplotlib.lines.Line2D([],[],
-    linestyle=linestyle[j], color=linecolor[j], label=str(j)) 
-    for j in range(J)]
-)
-plt.savefig(plotPath+'.rets.png');plt.clf()
-plt.close()
+        plt.figure(figsize=figsize)
+        for j in range(params.J):
+            plt.plot(
+                Clife[plottime,:,j].detach().cpu().t(),linestyle[j]+linecolor[j]
+            )
+        plt.xticks([i for i in range(params.L)]);plt.xlabel("i")
+        plt.title("Life-Cycle Consumption")
+        plt.legend(handles=
+            [matplotlib.lines.Line2D([],[],
+            linestyle=linestyle[j], color=linecolor[j], label=str(j)) 
+            for j in range(params.J)]
+        )
+        plt.savefig(params.plotPath+'.c.png');plt.clf()
+        plt.close()
 
-#---------------------------------------------------------------------------
-#Portfolio shares
-eqshare = P[:train-L-1,None]*Elife[:-1] \
-    / (P[:train-L-1,None]*Elife[:-1] + Q[:train-L-1,None]*Blife[:-1]) 
-plt.figure(figsize=figsize)
-for j in range(J):  
-    plt.plot(
-        eqshare[plottime,:,j].detach().cpu().t(),linestyle[j]+linecolor[j]
-    )
-plt.xticks([i for i in range(L-1)]);plt.xlabel("i")
-plt.title("Life-Cycle Portfolio Share: Equity Asset")
-plt.legend(handles=
-    [matplotlib.lines.Line2D([],[],
-    linestyle=linestyle[j], color=linecolor[j], label=str(j)) 
-    for j in range(J)]
-)
-plt.savefig(plotPath+'.port.png');plt.clf()
-plt.close()
+        #Consumption plot
+        Cj = C.reshape(params.train,params.J,params.L)
+        plt.figure(figsize=figsize)
+        for j in range(params.J):
+            plt.plot(
+                Cj[plottime,j,:].detach().cpu(),linestyle[j]+linecolor[j]
+            )
+        plt.xticks([]);plt.xlabel("t")
+        plt.title("Consumption")
+        plt.legend(handles=
+            [matplotlib.lines.Line2D([],[],
+            linestyle=linestyle[j], color=linecolor[j], label=str(j)) 
+            for j in range(params.J)]
+        )
+        plt.savefig(params.plotPath+'.consProcess.png');plt.clf()
+        plt.close()
 
-#---------------------------------------------------------------------------
-#Expected utility
-EU = torch.mean(
-    torch.tensordot(
-        u(Clife),torch.tensor([β**i for i in range(L)]),dims=([1],[0])
-    ),0
-)
-plt.figure(figsize=figsize)
-plt.bar([j for j in range(J)],EU.cpu())
-plt.xticks([j for j in range(J)]);plt.xlabel('j')
-plt.title('Expected Utility')
-plt.savefig(plotPath+'.EU.png');plt.clf();plt.close()
+        #Bond plot
+        Blife = torch.zeros(params.train-params.L,params.L-1,params.J)
+        Bj = B.reshape(params.train,params.J,params.L-1).permute(0,2,1)
+        for j in range(params.J):
+            for t in range(params.train-params.L):
+                for i in range(params.L-1):
+                    Blife[t,i,j] = Bj[t+i,i,j]
+        plt.figure(figsize=figsize)
+        for j in range(params.J):
+            plt.plot(
+                Blife[plottime,:,j].detach().cpu().t(),linestyle[j]+linecolor[j]
+            )
+        plt.xticks([i for i in range(params.L-1)]);plt.xlabel("i")
+        plt.title("Life-Cycle Bonds")
+        plt.legend(handles=
+            [matplotlib.lines.Line2D([],[],
+            linestyle=linestyle[j], color=linecolor[j], label=str(j)) 
+            for j in range(params.J)]
+        )
+        plt.savefig(params.plotPath+'.b.png');plt.clf()
+        plt.close()
+
+        #Equity plot
+        Elife = torch.zeros(params.train-params.L,params.L-1,params.J)
+        Ej = E.reshape(params.train,params.J,params.L-1).permute(0,2,1)
+        for j in range(params.J):
+            for t in range(params.train-params.L):
+                for i in range(params.L-1):
+                    Elife[t,i,j] = Ej[t+i,i,j]
+        plt.figure(figsize=figsize)
+        for j in range(params.J):
+            plt.plot(
+                Elife[plottime,:,j].detach().cpu().t(),linestyle[j]+linecolor[j]
+            )
+        plt.xticks([i for i in range(params.L-1)]);plt.xlabel("i")
+        plt.title("Life-Cycle Equity")
+        plt.legend(handles=
+            [matplotlib.lines.Line2D([],[],
+            linestyle=linestyle[j], color=linecolor[j], label=str(j)) 
+            for j in range(params.J)]
+        )
+        plt.savefig(params.plotPath+'.e.png');plt.clf()
+        plt.close()
+
+        #Equity price plot
+        pplot = P[plottime]
+        plt.figure(figsize=figsize)
+        plt.plot(pplot.detach().cpu(),'k-')
+        plt.title('Equity Price')
+        plt.xticks([])
+        plt.savefig(params.plotPath+'.p.png');plt.clf()
+        plt.close()
+
+        #Bond price plot
+        qplot = Q[plottime]
+        plt.figure(figsize=figsize)
+        plt.plot(qplot.detach().cpu(),'k-')
+        plt.title('Bond Price')
+        plt.xticks([])
+        plt.savefig(params.plotPath+'.q.png');plt.clf()
+        plt.close()
+
+        #Excess return 
+        Δ = x[...,params.divs]
+        eqRet = params.annualize((P[1:] + Δ[1:])/P[:-1])
+        bondRet = params.annualize(1/Q[:-1])
+        exRet = eqRet-bondRet
+        exRetplot = exRet[plottime]
+        plt.figure(figsize=figsize)
+        plt.plot(exRetplot.detach().cpu(),'k-')
+        plt.title('Excess Return')
+        plt.xticks([])
+        plt.savefig(params.plotPath+'.exret.png');plt.clf()
+        plt.close()
+
+        #---------------------------------------------------------------------------
+        #Individual returns
+        rets = params.annualize(
+            ((P[1:params.train-params.L,None]+Δ[1:params.train-params.L,None])*Elife[:-1] + Blife[:-1]) \
+                / (P[:params.train-params.L-1,None]*Elife[:-1] + Q[:params.train-params.L-1,None]*Blife[:-1]) 
+        )
+        plt.figure(figsize=figsize)
+        for j in range(params.J):  
+            plt.plot(
+                rets[plottime,:,j].detach().cpu().t(),linestyle[j]+linecolor[j]
+            )
+        plt.xticks([i for i in range(params.L-1)]);plt.xlabel("i")
+        plt.title("Life-Cycle Expected Portfolio Returns")
+        plt.legend(handles=
+            [matplotlib.lines.Line2D([],[],
+            linestyle=linestyle[j], color=linecolor[j], label=str(j)) 
+            for j in range(params.J)]
+        )
+        plt.savefig(params.plotPath+'.rets.png');plt.clf()
+        plt.close()
+
+        #---------------------------------------------------------------------------
+        #Portfolio shares
+        eqshare = P[:params.train-params.L-1,None]*Elife[:-1] \
+            / (P[:params.train-params.L-1,None]*Elife[:-1] + Q[:params.train-params.L-1,None]*Blife[:-1]) 
+        plt.figure(figsize=figsize)
+        for j in range(params.J):  
+            plt.plot(
+                eqshare[plottime,:,j].detach().cpu().t(),linestyle[j]+linecolor[j]
+            )
+        plt.xticks([i for i in range(params.L-1)]);plt.xlabel("i")
+        plt.title("Life-Cycle Portfolio Share: Equity Asset")
+        plt.legend(handles=
+            [matplotlib.lines.Line2D([],[],
+            linestyle=linestyle[j], color=linecolor[j], label=str(j)) 
+            for j in range(params.J)]
+        )
+        plt.savefig(params.plotPath+'.port.png');plt.clf()
+        plt.close()
+
+        #---------------------------------------------------------------------------
+        #Expected utility
+        EU = torch.mean(
+            torch.tensordot(
+                params.u(Clife),torch.tensor([params.β**i for i in range(params.L)]),dims=([1],[0])
+            ),0
+        )
+        plt.figure(figsize=figsize)
+        plt.bar([j for j in range(params.J)],EU.cpu())
+        plt.xticks([j for j in range(params.J)]);plt.xlabel('j')
+        plt.title('Expected Utility')
+        plt.savefig(params.plotPath+'.EU.png');plt.clf();plt.close()
+    
+data_sim = DATA_SIM(0)
+data_sim.solution_plots()

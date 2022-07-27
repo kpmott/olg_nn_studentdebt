@@ -175,8 +175,6 @@ class MODEL(nn.Module):
         #EULERS + MCCs + consumption penalty 
         loss_vec = torch.concat([eqEuler,bondEuler,equityMCC,bondMCC,cpen],-1)
 
-        self.C = C
-
         #set model back to training (dropout back on)
         self.model.train()
 

@@ -6,10 +6,11 @@ from detSS import DET_SS_ALLOCATIONS
 from dataset import DATASET
         
 class TRAIN():
-    def __init__(self,g):
+    def __init__(self,g,saveTrain=True):
         self.params = PARAMS(g)
         self.dataset = DATASET(g)
         self.model = MODEL(g)
+        self.saveTrain = saveTrain
 
     def train_loop(self,epochs=100,batchsize=32,lr=1e-8,losses=[]):
         tol = 1e-3
@@ -57,3 +58,26 @@ class TRAIN():
             torch.cuda.empty_cache()
         
         return losses
+    
+    def train(self):
+        
+        num_regimes = 3
+        epochs = [500 for epoch in range(num_regimes)]
+        batches = [2**(5+batch) for batch in range(num_regimes)]
+        lrs = [1e-5*10**(-n) for n in range(num_regimes)]
+
+        losses=[]
+        for regime in range(num_regimes):
+            losses = self.train_loop(
+                    epochs=epochs[regime],
+                    batchsize=batches[regime],
+                    lr=lrs[regime],
+                    losses=losses
+            )
+
+            if self.saveTrain:
+                self.model.eval()
+                torch.save(self.model.state_dict(), 
+                    self.params.savePath+'/.trained_model_params.pt'
+                )
+                self.model.train()
