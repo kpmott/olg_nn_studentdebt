@@ -13,11 +13,12 @@ args = parser.parse_args()
 config = vars(args)
 g = config['gpu']
 
-rbarlist = [0.025+0.005*i for i in range(8)]
+forgivenesslist = [0.05*i for i in range(21)]
 devicelist = ["cuda:"+str(0) for i in range(8)]
 
+g=18
 device = torch.device(devicelist[g] if torch.cuda.is_available() else "cpu")
-rbar = rbarlist[g]
+forgiveness = forgivenesslist[g]
 
 #-------------------------------------------------------------------------------
 #PARAMS 
@@ -244,6 +245,8 @@ if not os.path.exists(plotPath):
 #amortization function
 #student debt interest rate
 
+rbar = 0.025
+
 def amort(rbar):
     rbar = periodize(rbar)
     if rbar == 0:
@@ -253,10 +256,9 @@ def amort(rbar):
     return payment
 
 amortPay = amort(rbar)
-amortPay
 
 #debt payment per period
-debtPay = debtEndow*amortPay*isWorker
+debtPay = debtEndow*amortPay*isWorker*(1-forgiveness)
 
 #how much total tax revenue to raise
 taxRev = torch.sum(debtEndow[:,:,0]) - torch.sum(debtPay)
