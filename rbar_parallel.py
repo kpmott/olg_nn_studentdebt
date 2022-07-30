@@ -14,9 +14,9 @@ config = vars(args)
 g = config['gpu']
 
 rbarlist = [0.025+0.005*i for i in range(8)]
-devicelist = ["cuda:"+str(i) for i in range(8)]
+devicelist = ["cuda:"+str(0) for i in range(8)]
 
-device = torch.device(g if torch.cuda.is_available() else "cpu")
+device = torch.device(devicelist[g] if torch.cuda.is_available() else "cpu")
 rbar = rbarlist[g]
 
 #-------------------------------------------------------------------------------
@@ -230,8 +230,8 @@ def padAssetsF(ASSETS,yLen,side=0):
     return torch.flatten(ASSETSJpad,start_dim=-2).to(device)
 
 #-------------------------------------------------------------------------------
-savePrePath = './pretrain/'+str(g)+'/.pretrained_model_params.pt'
-savePath    = './train/'+str(g)+'/.trained_model_params.pt'
+savePrePath = './pretrain/'+str(g)+'/'
+savePath    = './train/'+str(g)+'/'
 plotPath = './plots/'+str(g)+'/'
 if not os.path.exists(savePrePath):
     os.makedirs(savePrePath)
@@ -245,6 +245,7 @@ if not os.path.exists(plotPath):
 #student debt interest rate
 
 def amort(rbar):
+    rbar = periodize(rbar)
     if rbar == 0:
         payment = 1/wp
     else:
@@ -252,6 +253,7 @@ def amort(rbar):
     return payment
 
 amortPay = amort(rbar)
+amortPay
 
 #debt payment per period
 debtPay = debtEndow*amortPay*isWorker
@@ -552,7 +554,7 @@ model = MODEL()#.to(device)
 
 #This generates the training data
 class CustDataSet(Dataset):
-    def __init__(self,pretrain=False):
+    def __init__(self,model,pretrain=False):
         model.eval() #turn off dropout
         
         #ignore gradients: faster
@@ -612,7 +614,7 @@ class CustDataSet(Dataset):
 def pretrain_loop(epochs=100,batchsize=50,lr=1e-6,losses=[]):
     
     #generate pretraining data: labels are detSS
-    data = CustDataSet(pretrain=True) 
+    data = CustDataSet(model,pretrain=True) 
     
     for epoch in tqdm(range(epochs)):
 
@@ -623,7 +625,7 @@ def pretrain_loop(epochs=100,batchsize=50,lr=1e-6,losses=[]):
         )
 
         #optimizer
-        optimizer = Adam(model.parameters(), lr=lr)
+        optimizer = Adam(model.parameters(), lr=lr, capturable=True)
 
         #actual loop
         batchloss = []
@@ -652,9 +654,9 @@ def pretrain_loop(epochs=100,batchsize=50,lr=1e-6,losses=[]):
 def train_loop(epochs=100,batchsize=32,lr=1e-8,losses=[]):
     tol = 1e-3
 
-    for epoch in tqdm(range(epochs)):
+    for epoch in (pbar := tqdm(range(epochs))):
         #generate pretraining data: labels are detSS
-        data = CustDataSet(pretrain=False) 
+        data = CustDataSet(model, pretrain=False) 
 
         #load training data into DataLoader object for batching (ON GPU)
         train_loader = DataLoader(
@@ -676,6 +678,7 @@ def train_loop(epochs=100,batchsize=32,lr=1e-8,losses=[]):
             optimizer.step()
         
         epochloss = np.mean(batchloss)
+        pbar.set_description("Loss %.2e" % epochloss)
         losses.append(epochloss)
         
         figsize = (10,4)
@@ -695,53 +698,56 @@ def train_loop(epochs=100,batchsize=32,lr=1e-8,losses=[]):
     return losses
 
 #-------------------------------------------------------------------------------
-savePretrain = False
-loadPretrain = False
-saveTrain = True
-#-------------------------------------------------------------------------------
-#STEP 1: PRETRAINING
+# runPretrain = False
+# savePretrain = True
+# loadPretrain = False
+# saveTrain = True
+# #-------------------------------------------------------------------------------
+# #STEP 1: PRETRAINING
 
-if savePretrain:
-    losses = pretrain_loop(epochs=250,batchsize=50,lr=1e-4)
-    losses = pretrain_loop(epochs=250,batchsize=50,lr=1e-5,losses=losses)
-    losses = pretrain_loop(epochs=250,batchsize=100,lr=1e-6,losses=losses)
-    losses = pretrain_loop(epochs=250,batchsize=200,lr=1e-6,losses=losses)
+# if runPretrain:
+#     losses = pretrain_loop(epochs=500,batchsize=150,lr=1e-4)
+#     # losses = pretrain_loop(epochs=250,batchsize=50,lr=1e-5,losses=losses)
+#     # losses = pretrain_loop(epochs=250,batchsize=100,lr=1e-6,losses=losses)
+#     # losses = pretrain_loop(epochs=250,batchsize=200,lr=1e-6,losses=losses)
+#     if savePretrain:
+#         model.eval()
+#         torch.save(model.state_dict(), savePrePath+'.pretrained_model.pt')
+#         model.train()
 
-    model.eval()
-    torch.save(model.state_dict(), savePrePath)
-    model.train()
+# #-------------------------------------------------------------------------------
+# #STEP 2: MAIN TRAINING
 
-#-------------------------------------------------------------------------------
-#STEP 2: MAIN TRAINING
+# if loadPretrain:
+#     model.load_state_dict(torch.load(savePrePath+'.pretrained_model.pt'))
 
-if loadPretrain:
-    model.load_state_dict(torch.load(savePrePath))
+# losses = train_loop(epochs=100,batchsize=50,lr=1e-5)
+# if saveTrain:
+#     model.eval()
+#     torch.save(model.state_dict(), savePath+'.trained_model.pt')
+#     model.train()
 
-losses = train_loop(epochs=500,batchsize=32,lr=1e-5)
-if saveTrain:
-    model.eval()
-    torch.save(model.state_dict(), savePath)
-    model.train()
+# losses = train_loop(epochs=200,batchsize=80,lr=1e-6,losses=losses)
+# if saveTrain:
+#     model.eval()
+#     torch.save(model.state_dict(), savePath+'.trained_model.pt')
+#     model.train()
 
-losses = train_loop(epochs=500,batchsize=64,lr=1e-6,losses=losses)
-if saveTrain:
-    model.eval()
-    torch.save(model.state_dict(), savePath)
-    model.train()
+# losses = train_loop(epochs=150,batchsize=128,lr=5e-7,losses=losses)
+# if saveTrain:
+#     model.eval()
+#     torch.save(model.state_dict(), savePath+'.trained_model.pt')
+#     model.train()
 
-losses = train_loop(epochs=500,batchsize=100,lr=1e-7,losses=losses)
-if saveTrain:
-    model.eval()
-    torch.save(model.state_dict(), savePath)
-    model.train()
+# #-------------------------------------------------------------------------------
+# model.eval()
+# model.load_state_dict(torch.load(savePath+'.trained_model.pt'))
 
-#-------------------------------------------------------------------------------
-model.eval()
-model.load_state_dict(torch.load(savePath))
-
-#-------------------------------------------------------------------------------
+# #-------------------------------------------------------------------------------
 #Data
-data = CustDataSet()
+model.eval
+model.load_state_dict(torch.load(savePath+'.trained_model.pt'))
+data = CustDataSet(model)
 x = data.X
 model.eval()        
 
@@ -843,7 +849,7 @@ plottime = slice(-150,train,1)
 figsize = (10,4)
 
 #---------------------------------------------------------------------------
-#Consumption lifecycle plot
+# Consumption lifecycle plot
 Clife = torch.zeros(train-L,L,J)
 Cj = C.reshape(train,J,L).permute(0,2,1)
 for j in range(J):
@@ -857,11 +863,13 @@ for j in range(J):
         Clife[plottime,:,j].detach().cpu().t(),linestyle[j]+linecolor[j]
     )
 plt.xticks([i for i in range(L)]);plt.xlabel("i")
-plt.title("Life-Cycle Consumption")
+plt.ylim((0.2,1.2))
+plt.title("Life-Cycle Consumption"+": rbar = "+"{:.2%}".format(rbar))
 plt.legend(handles=
     [matplotlib.lines.Line2D([],[],
     linestyle=linestyle[j], color=linecolor[j], label=str(j)) 
-    for j in range(J)]
+    for j in range(J)],
+    loc=2
 )
 plt.savefig(plotPath+'.c.png');plt.clf()
 plt.close()
@@ -874,7 +882,7 @@ for j in range(J):
         Cj[plottime,j,:].detach().cpu(),linestyle[j]+linecolor[j]
     )
 plt.xticks([]);plt.xlabel("t")
-plt.title("Consumption")
+plt.title("Consumption"+": rbar = "+"{:.2%}".format(rbar))
 plt.legend(handles=
     [matplotlib.lines.Line2D([],[],
     linestyle=linestyle[j], color=linecolor[j], label=str(j)) 
@@ -896,7 +904,8 @@ for j in range(J):
         Blife[plottime,:,j].detach().cpu().t(),linestyle[j]+linecolor[j]
     )
 plt.xticks([i for i in range(L-1)]);plt.xlabel("i")
-plt.title("Life-Cycle Bonds")
+plt.ylim(-.4,.4)
+plt.title("Life-Cycle Bonds"+": rbar = "+"{:.2%}".format(rbar))
 plt.legend(handles=
     [matplotlib.lines.Line2D([],[],
     linestyle=linestyle[j], color=linecolor[j], label=str(j)) 
@@ -918,11 +927,13 @@ for j in range(J):
         Elife[plottime,:,j].detach().cpu().t(),linestyle[j]+linecolor[j]
     )
 plt.xticks([i for i in range(L-1)]);plt.xlabel("i")
-plt.title("Life-Cycle Equity")
+plt.ylim((.05,.19))
+plt.title("Life-Cycle Equity"+": rbar = "+"{:.2%}".format(rbar))
 plt.legend(handles=
     [matplotlib.lines.Line2D([],[],
     linestyle=linestyle[j], color=linecolor[j], label=str(j)) 
-    for j in range(J)]
+    for j in range(J)],
+    loc=2
 )
 plt.savefig(plotPath+'.e.png');plt.clf()
 plt.close()
@@ -931,7 +942,7 @@ plt.close()
 pplot = P[plottime]
 plt.figure(figsize=figsize)
 plt.plot(pplot.detach().cpu(),'k-')
-plt.title('Equity Price')
+plt.title('Equity Price'+": rbar = "+"{:.2%}".format(rbar))
 plt.xticks([])
 plt.savefig(plotPath+'.p.png');plt.clf()
 plt.close()
@@ -940,7 +951,7 @@ plt.close()
 qplot = Q[plottime]
 plt.figure(figsize=figsize)
 plt.plot(qplot.detach().cpu(),'k-')
-plt.title('Bond Price')
+plt.title('Bond Price'+": rbar = "+"{:.2%}".format(rbar))
 plt.xticks([])
 plt.savefig(plotPath+'.q.png');plt.clf()
 plt.close()
@@ -953,8 +964,9 @@ exRet = eqRet-bondRet
 exRetplot = exRet[plottime]
 plt.figure(figsize=figsize)
 plt.plot(exRetplot.detach().cpu(),'k-')
-plt.title('Excess Return')
+plt.title('Excess Return'+": rbar = "+"{:.2%}".format(rbar))
 plt.xticks([])
+plt.ylim((-.005,.005))
 plt.savefig(plotPath+'.exret.png');plt.clf()
 plt.close()
 
@@ -970,7 +982,8 @@ for j in range(J):
         rets[plottime,:,j].detach().cpu().t(),linestyle[j]+linecolor[j]
     )
 plt.xticks([i for i in range(L-1)]);plt.xlabel("i")
-plt.title("Life-Cycle Expected Portfolio Returns")
+plt.ylim((.05,.12))
+plt.title("Life-Cycle Realized Portfolio Returns"+": rbar = "+"{:.2%}".format(rbar))
 plt.legend(handles=
     [matplotlib.lines.Line2D([],[],
     linestyle=linestyle[j], color=linecolor[j], label=str(j)) 
@@ -989,7 +1002,7 @@ for j in range(J):
         eqshare[plottime,:,j].detach().cpu().t(),linestyle[j]+linecolor[j]
     )
 plt.xticks([i for i in range(L-1)]);plt.xlabel("i")
-plt.title("Life-Cycle Portfolio Share: Equity Asset")
+plt.title("Life-Cycle Portfolio Share: Equity Asset"+": rbar = "+"{:.2%}".format(rbar))
 plt.legend(handles=
     [matplotlib.lines.Line2D([],[],
     linestyle=linestyle[j], color=linecolor[j], label=str(j)) 
@@ -1008,5 +1021,8 @@ EU = torch.mean(
 plt.figure(figsize=figsize)
 plt.bar([j for j in range(J)],EU.cpu())
 plt.xticks([j for j in range(J)]);plt.xlabel('j')
-plt.title('Expected Utility')
+plt.ylim((-16,0))
+plt.title('Expected Utility'+": rbar = "+"{:.2%}".format(rbar))
 plt.savefig(plotPath+'.EU.png');plt.clf();plt.close()
+
+#-------------------------------------------------------------------------------
