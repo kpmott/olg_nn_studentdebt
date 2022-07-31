@@ -1,14 +1,14 @@
 from packages import *
 
-from forgiveness import MODEL,rbarlist,bondprice,CustDataSet,annualize
+from forgiveness import MODEL,forgivenesslist,bondprice,CustDataSet,annualize
 
 rlist = []
 rlistperiod = []
 
-for rbar in range(8):
+for g in range(9):
     model = MODEL()
     model.eval()
-    model.load_state_dict(torch.load('./train/'+str(rbar)+'/.trained_model.pt'))
+    model.load_state_dict(torch.load('./train/'+str(g)+'/.trained_model.pt'))
     model.eval()
     DataSet = CustDataSet(model)
     x = DataSet.X
@@ -20,9 +20,10 @@ for rbar in range(8):
     del model, DataSet
 
 plt.figure(figsize=(10,6))
-plt.plot(rbarlist,rlist)
-plt.plot(rbarlist,rbarlist,'--k')
-plt.xlabel('rbar: Student Loan Rate');plt.ylabel('r: Private Borrowing Rate')
-plt.title('Private Borrowing Rate as a function of Student Loan Rate')
-plt.savefig('r_rbar.png');plt.clf();plt.close()
+plt.plot(forgivenesslist,rlist)
+#plt.plot(forgivenesslist,forgivenesslist,'--k')
+plt.xlabel('Student Loan Cancelation Percentage');plt.ylabel('r: Private Borrowing Rate')
+#plt.yaxis.set_major_formatter(StrMethodFormatter('{x:,.2f}'))
+plt.title('Private Borrowing Rate as a function of Student Loan Cancelation Percentage')
+plt.savefig('cancelation.png');plt.clf();plt.close()
 

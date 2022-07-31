@@ -13,10 +13,10 @@ args = parser.parse_args()
 config = vars(args)
 g = config['gpu']
 
-forgivenesslist = [0.05*i for i in range(21)]
+forgivenesslist = np.linspace(0.,1.,9)
 devicelist = ["cuda:"+str(0) for i in range(8)]
 
-g=18
+#g=0
 device = torch.device(devicelist[g] if torch.cuda.is_available() else "cpu")
 forgiveness = forgivenesslist[g]
 
@@ -700,12 +700,12 @@ def train_loop(epochs=100,batchsize=32,lr=1e-8,losses=[]):
     return losses
 
 #-------------------------------------------------------------------------------
-# runPretrain = False
-# savePretrain = True
-# loadPretrain = False
-# saveTrain = True
-# #-------------------------------------------------------------------------------
-# #STEP 1: PRETRAINING
+runPretrain = False
+savePretrain = False
+loadPretrain = False
+saveTrain = True
+#-------------------------------------------------------------------------------
+#STEP 1: PRETRAINING
 
 # if runPretrain:
 #     losses = pretrain_loop(epochs=500,batchsize=150,lr=1e-4)
@@ -717,8 +717,8 @@ def train_loop(epochs=100,batchsize=32,lr=1e-8,losses=[]):
 #         torch.save(model.state_dict(), savePrePath+'.pretrained_model.pt')
 #         model.train()
 
-# #-------------------------------------------------------------------------------
-# #STEP 2: MAIN TRAINING
+#-------------------------------------------------------------------------------
+#STEP 2: MAIN TRAINING
 
 # if loadPretrain:
 #     model.load_state_dict(torch.load(savePrePath+'.pretrained_model.pt'))
@@ -742,8 +742,8 @@ def train_loop(epochs=100,batchsize=32,lr=1e-8,losses=[]):
 #     model.train()
 
 # #-------------------------------------------------------------------------------
-# model.eval()
-# model.load_state_dict(torch.load(savePath+'.trained_model.pt'))
+model.eval()
+model.load_state_dict(torch.load(savePath+'.trained_model.pt'))
 
 # #-------------------------------------------------------------------------------
 #Data
@@ -866,7 +866,7 @@ for j in range(J):
     )
 plt.xticks([i for i in range(L)]);plt.xlabel("i")
 plt.ylim((0.2,1.2))
-plt.title("Life-Cycle Consumption"+": rbar = "+"{:.2%}".format(rbar))
+plt.title("Life-Cycle Consumption"+": Forgiveness = "+"{:.2%}".format(forgiveness))
 plt.legend(handles=
     [matplotlib.lines.Line2D([],[],
     linestyle=linestyle[j], color=linecolor[j], label=str(j)) 
@@ -884,7 +884,7 @@ for j in range(J):
         Cj[plottime,j,:].detach().cpu(),linestyle[j]+linecolor[j]
     )
 plt.xticks([]);plt.xlabel("t")
-plt.title("Consumption"+": rbar = "+"{:.2%}".format(rbar))
+plt.title("Consumption"+": Forgiveness = "+"{:.2%}".format(forgiveness))
 plt.legend(handles=
     [matplotlib.lines.Line2D([],[],
     linestyle=linestyle[j], color=linecolor[j], label=str(j)) 
@@ -907,7 +907,7 @@ for j in range(J):
     )
 plt.xticks([i for i in range(L-1)]);plt.xlabel("i")
 plt.ylim(-.4,.4)
-plt.title("Life-Cycle Bonds"+": rbar = "+"{:.2%}".format(rbar))
+plt.title("Life-Cycle Bonds"+": Forgiveness = "+"{:.2%}".format(forgiveness))
 plt.legend(handles=
     [matplotlib.lines.Line2D([],[],
     linestyle=linestyle[j], color=linecolor[j], label=str(j)) 
@@ -930,7 +930,7 @@ for j in range(J):
     )
 plt.xticks([i for i in range(L-1)]);plt.xlabel("i")
 plt.ylim((.05,.19))
-plt.title("Life-Cycle Equity"+": rbar = "+"{:.2%}".format(rbar))
+plt.title("Life-Cycle Equity"+": Forgiveness = "+"{:.2%}".format(forgiveness))
 plt.legend(handles=
     [matplotlib.lines.Line2D([],[],
     linestyle=linestyle[j], color=linecolor[j], label=str(j)) 
@@ -944,7 +944,7 @@ plt.close()
 pplot = P[plottime]
 plt.figure(figsize=figsize)
 plt.plot(pplot.detach().cpu(),'k-')
-plt.title('Equity Price'+": rbar = "+"{:.2%}".format(rbar))
+plt.title('Equity Price'+": Forgiveness = "+"{:.2%}".format(forgiveness))
 plt.xticks([])
 plt.savefig(plotPath+'.p.png');plt.clf()
 plt.close()
@@ -953,7 +953,7 @@ plt.close()
 qplot = Q[plottime]
 plt.figure(figsize=figsize)
 plt.plot(qplot.detach().cpu(),'k-')
-plt.title('Bond Price'+": rbar = "+"{:.2%}".format(rbar))
+plt.title('Bond Price'+": Forgiveness = "+"{:.2%}".format(forgiveness))
 plt.xticks([])
 plt.savefig(plotPath+'.q.png');plt.clf()
 plt.close()
@@ -966,7 +966,7 @@ exRet = eqRet-bondRet
 exRetplot = exRet[plottime]
 plt.figure(figsize=figsize)
 plt.plot(exRetplot.detach().cpu(),'k-')
-plt.title('Excess Return'+": rbar = "+"{:.2%}".format(rbar))
+plt.title('Excess Return'+": Forgiveness = "+"{:.2%}".format(forgiveness))
 plt.xticks([])
 plt.ylim((-.005,.005))
 plt.savefig(plotPath+'.exret.png');plt.clf()
@@ -985,7 +985,7 @@ for j in range(J):
     )
 plt.xticks([i for i in range(L-1)]);plt.xlabel("i")
 plt.ylim((.05,.12))
-plt.title("Life-Cycle Realized Portfolio Returns"+": rbar = "+"{:.2%}".format(rbar))
+plt.title("Life-Cycle Realized Portfolio Returns"+": Forgiveness = "+"{:.2%}".format(forgiveness))
 plt.legend(handles=
     [matplotlib.lines.Line2D([],[],
     linestyle=linestyle[j], color=linecolor[j], label=str(j)) 
@@ -1004,7 +1004,7 @@ for j in range(J):
         eqshare[plottime,:,j].detach().cpu().t(),linestyle[j]+linecolor[j]
     )
 plt.xticks([i for i in range(L-1)]);plt.xlabel("i")
-plt.title("Life-Cycle Portfolio Share: Equity Asset"+": rbar = "+"{:.2%}".format(rbar))
+plt.title("Life-Cycle Portfolio Share: Equity Asset"+": Forgiveness = "+"{:.2%}".format(forgiveness))
 plt.legend(handles=
     [matplotlib.lines.Line2D([],[],
     linestyle=linestyle[j], color=linecolor[j], label=str(j)) 
@@ -1024,7 +1024,7 @@ plt.figure(figsize=figsize)
 plt.bar([j for j in range(J)],EU.cpu())
 plt.xticks([j for j in range(J)]);plt.xlabel('j')
 plt.ylim((-16,0))
-plt.title('Expected Utility'+": rbar = "+"{:.2%}".format(rbar))
+plt.title('Expected Utility'+": Forgiveness = "+"{:.2%}".format(forgiveness))
 plt.savefig(plotPath+'.EU.png');plt.clf();plt.close()
 
 #-------------------------------------------------------------------------------

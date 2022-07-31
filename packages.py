@@ -35,5 +35,6 @@ logging.getLogger("pytorch_lightning").setLevel(logging.WARNING)
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.lines
+from matplotlib.ticker import StrMethodFormatter
 
 import argparse
