@@ -1,6 +1,6 @@
 from packages import *
 
-from forgiveness import MODEL,forgivenesslist,bondprice,CustDataSet,annualize
+from governance import MODEL,forgivenesslist,bondprice,CustDataSet,annualize
 
 rlist = []
 rlistperiod = []
