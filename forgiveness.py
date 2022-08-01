@@ -14,9 +14,8 @@ config = vars(args)
 g = config['gpu']
 
 forgivenesslist = np.linspace(0.,1.,9)
-devicelist = ["cuda:"+str(0) for i in range(8)]
+devicelist = ["cuda:"+str(0) for i in range(9)]
 
-#g=0
 device = torch.device(devicelist[g] if torch.cuda.is_available() else "cpu")
 forgiveness = forgivenesslist[g]
 
@@ -259,14 +258,21 @@ amortPay = amort(rbar)
 
 #debt payment per period
 debtPay = debtEndow*amortPay*isWorker*(1-forgiveness)
+debtPay0f = debtEndow*amortPay*isWorker
 
 #how much total tax revenue to raise
 taxRev = torch.sum(debtEndow[:,:,0]) - torch.sum(debtPay)
+taxRev0f = torch.sum(debtEndow[:,:,0]) - torch.sum(debtPay0f)
 
 #tax/transfer 
+τ0f = y[0,:,0][:,None]*torch.ones(1,J,L)
+τ0f /= torch.sum(τ0f)
+τ0f *= taxRev0f
+
 τ = y[0,:,0][:,None]*torch.ones(1,J,L)
-τ /= torch.sum(τ)
-τ *= taxRev
+τ[:,0,:] = τ0f[:,0,:]
+τ[:,1:,:] /= torch.sum(τ[:,1:,:])
+τ[:,1:,:] *= taxRev - torch.sum(τ[:,0,:])
 
 #-------------------------------------------------------------------------------
 #to solve for deterministic steady state (detSS) allocations, prices
@@ -703,52 +709,52 @@ def train_loop(epochs=100,batchsize=32,lr=1e-8,losses=[]):
 runPretrain = False
 savePretrain = False
 loadPretrain = False
+runTrain = False
 saveTrain = True
 #-------------------------------------------------------------------------------
-#STEP 1: PRETRAINING
+# STEP 1: PRETRAINING
 
-# if runPretrain:
-#     losses = pretrain_loop(epochs=500,batchsize=150,lr=1e-4)
-#     # losses = pretrain_loop(epochs=250,batchsize=50,lr=1e-5,losses=losses)
-#     # losses = pretrain_loop(epochs=250,batchsize=100,lr=1e-6,losses=losses)
-#     # losses = pretrain_loop(epochs=250,batchsize=200,lr=1e-6,losses=losses)
-#     if savePretrain:
-#         model.eval()
-#         torch.save(model.state_dict(), savePrePath+'.pretrained_model.pt')
-#         model.train()
+if runPretrain:
+    losses = pretrain_loop(epochs=500,batchsize=150,lr=1e-4)
+    # losses = pretrain_loop(epochs=250,batchsize=50,lr=1e-5,losses=losses)
+    # losses = pretrain_loop(epochs=250,batchsize=100,lr=1e-6,losses=losses)
+    # losses = pretrain_loop(epochs=250,batchsize=200,lr=1e-6,losses=losses)
+    if savePretrain:
+        model.eval()
+        torch.save(model.state_dict(), savePrePath+'.pretrained_model.pt')
+        model.train()
+
+# -------------------------------------------------------------------------------
+# STEP 2: MAIN TRAINING
+
+if runTrain:
+    if loadPretrain:
+        model.load_state_dict(torch.load(savePrePath+'.pretrained_model.pt'))
+
+    losses = train_loop(epochs=300,batchsize=50,lr=5e-6)
+    if saveTrain:
+        model.eval()
+        torch.save(model.state_dict(), savePath+'.trained_model.pt')
+        model.train()
+
+    losses = train_loop(epochs=200 ,batchsize=80,lr=1e-6,losses=losses)
+    if saveTrain:
+        model.eval()
+        torch.save(model.state_dict(), savePath+'.trained_model.pt')
+        model.train()
+
+    losses = train_loop(epochs=200,batchsize=128,lr=5e-7,losses=losses)
+    if saveTrain:
+        model.eval()
+        torch.save(model.state_dict(), savePath+'.trained_model.pt')
+        model.train()
 
 #-------------------------------------------------------------------------------
-#STEP 2: MAIN TRAINING
-
-# if loadPretrain:
-#     model.load_state_dict(torch.load(savePrePath+'.pretrained_model.pt'))
-
-# losses = train_loop(epochs=100,batchsize=50,lr=1e-5)
-# if saveTrain:
-#     model.eval()
-#     torch.save(model.state_dict(), savePath+'.trained_model.pt')
-#     model.train()
-
-# losses = train_loop(epochs=200,batchsize=80,lr=1e-6,losses=losses)
-# if saveTrain:
-#     model.eval()
-#     torch.save(model.state_dict(), savePath+'.trained_model.pt')
-#     model.train()
-
-# losses = train_loop(epochs=150,batchsize=128,lr=5e-7,losses=losses)
-# if saveTrain:
-#     model.eval()
-#     torch.save(model.state_dict(), savePath+'.trained_model.pt')
-#     model.train()
-
-# #-------------------------------------------------------------------------------
-model.eval()
-model.load_state_dict(torch.load(savePath+'.trained_model.pt'))
-
-# #-------------------------------------------------------------------------------
 #Data
-model.eval
-model.load_state_dict(torch.load(savePath+'.trained_model.pt'))
+if not runTrain:
+    model.eval()
+    model.load_state_dict(torch.load(savePath+'.trained_model.pt'))
+
 data = CustDataSet(model)
 x = data.X
 model.eval()        
@@ -906,7 +912,7 @@ for j in range(J):
         Blife[plottime,:,j].detach().cpu().t(),linestyle[j]+linecolor[j]
     )
 plt.xticks([i for i in range(L-1)]);plt.xlabel("i")
-plt.ylim(-.4,.4)
+plt.ylim(-.5,.5)
 plt.title("Life-Cycle Bonds"+": Forgiveness = "+"{:.2%}".format(forgiveness))
 plt.legend(handles=
     [matplotlib.lines.Line2D([],[],
@@ -946,6 +952,7 @@ plt.figure(figsize=figsize)
 plt.plot(pplot.detach().cpu(),'k-')
 plt.title('Equity Price'+": Forgiveness = "+"{:.2%}".format(forgiveness))
 plt.xticks([])
+plt.ylim((1.5,2.4))
 plt.savefig(plotPath+'.p.png');plt.clf()
 plt.close()
 
@@ -955,6 +962,7 @@ plt.figure(figsize=figsize)
 plt.plot(qplot.detach().cpu(),'k-')
 plt.title('Bond Price'+": Forgiveness = "+"{:.2%}".format(forgiveness))
 plt.xticks([])
+plt.ylim((.42,.65))
 plt.savefig(plotPath+'.q.png');plt.clf()
 plt.close()
 
@@ -984,7 +992,7 @@ for j in range(J):
         rets[plottime,:,j].detach().cpu().t(),linestyle[j]+linecolor[j]
     )
 plt.xticks([i for i in range(L-1)]);plt.xlabel("i")
-plt.ylim((.05,.12))
+plt.ylim((.05,.1))
 plt.title("Life-Cycle Realized Portfolio Returns"+": Forgiveness = "+"{:.2%}".format(forgiveness))
 plt.legend(handles=
     [matplotlib.lines.Line2D([],[],
